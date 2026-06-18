@@ -25,6 +25,8 @@ MYSQL_DATABASE=db001 \
 go run ./cmd
 */
 
+var ErrRecordNotFound = gorm.ErrRecordNotFound
+
 func InitDB() (db *gorm.DB) {
 	driver := strings.ToLower(strings.TrimSpace(getEnv("DB_DRIVER", "sqlite")))
 

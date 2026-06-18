@@ -4,14 +4,14 @@ import (
 	"errors"
 	"my_feed/internal/account"
 	"my_feed/internal/auth"
+	"my_feed/internal/db"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
-func JWTAuth(db *gorm.DB) gin.HandlerFunc {
+func JWTAuth(accountRepo *account.AccountRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 读取Authorization头
 		authHeader := c.GetHeader("Authorization")
@@ -44,10 +44,10 @@ func JWTAuth(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		// 检查数据库中token
-		acc, err := account.FindAccountByID(db, claims.AccountID)
+		acc, err := accountRepo.FindAccountByID(claims.AccountID)
 		if err != nil {
 			// find返回的错误有多种，需分开处理
-			if errors.Is(err, gorm.ErrRecordNotFound) {
+			if errors.Is(err, db.ErrRecordNotFound) {
 				c.JSON(http.StatusUnauthorized, gin.H{
 					"error": "user doesn't exist",
 				})
