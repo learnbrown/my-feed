@@ -3,6 +3,7 @@ package router
 import (
 	"my_feed/internal/account"
 	"my_feed/internal/auth"
+	"my_feed/internal/db"
 	"my_feed/internal/middleware"
 	"net/http"
 	"strings"
@@ -63,19 +64,21 @@ func (this *AccountHandler) Register(c *gin.Context) {
 	// 去除用户名中的空格
 	input.Username = strings.TrimSpace(input.Username)
 
-	// 查询用户名是否存在
-	var count int64
-	err = this.db.Model(&account.Account{}).
-		Where("username = ?", input.Username).
-		Count(&count).
-		Error
+	// 检查用户名是否为空
+	if input.Username == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "username required",
+		})
+		return
+	}
 
+	// 查询用户名是否存在
+	exists, err := account.ExistAccount(this.db, input.Username)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-
-	if count != 0 {
+	if exists {
 		c.JSON(http.StatusConflict, gin.H{"error": "Username exists"})
 		return
 	}
@@ -94,6 +97,15 @@ func (this *AccountHandler) Register(c *gin.Context) {
 
 	err = account.CreateAccount(this.db, &acc)
 	if err != nil {
+		// todo
+		// 并发场景下可能会触发唯一索引错误
+		// 查重后有用户注册
+		if db.IsDuplicateKeyError(err) {
+			c.JSON(http.StatusConflict, gin.H{
+				"error": "username exists",
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -115,7 +127,9 @@ func (this *AccountHandler) Login(c *gin.Context) {
 	var input LoginRequest
 	err := c.ShouldBindJSON(&input)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		// 不应该用500，应该用400表示json错误，缺少字段
+		// c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"status": "Bind input",
 			"error":  err.Error(),
 		})

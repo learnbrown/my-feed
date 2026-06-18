@@ -43,6 +43,11 @@ func ParseToken(tokenString string) (claims *Claims, err error) {
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
 		// todo 为什么
 		// 检查签名算法
+		/*
+		原因是防止“算法混淆”：服务端必须确认 token 用的是自己预期的签名算法，
+		不能让攻击者构造一个奇怪算法的 token 来绕验证。
+		更严格一点可以直接判断 token.Method == jwt.SigningMethodHS256。
+		*/
 		_, ok := token.Method.(*jwt.SigningMethodHMAC)
 		if !ok {
 			return nil, errors.New("unexpected signing method")

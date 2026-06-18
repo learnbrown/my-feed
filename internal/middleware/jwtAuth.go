@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"my_feed/internal/account"
 	"my_feed/internal/auth"
 	"net/http"
@@ -36,8 +37,7 @@ func JWTAuth(db *gorm.DB) gin.HandlerFunc {
 		claims, err := auth.ParseToken(tokenString)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{
-				"error": "Invaild token or it has expired",
-				"err": err.Error(),
+				"error": "Invalid token or it has expired",
 			})
 			c.Abort()
 			return
@@ -45,9 +45,25 @@ func JWTAuth(db *gorm.DB) gin.HandlerFunc {
 
 		// 检查数据库中token
 		acc, err := account.FindAccountByID(db, claims.AccountID)
+		if err != nil {
+			// find返回的错误有多种，需分开处理
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				c.JSON(http.StatusUnauthorized, gin.H{
+					"error": "user doesn't exist",
+				})
+				c.Abort()
+				return
+			}
+
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+			c.Abort()
+			return
+		}
 		if acc.Token != tokenString {
 			c.JSON(http.StatusUnauthorized, gin.H{
-				"error": "Invaild token or it has expired",
+				"error": "Invalid token or it has expired",
 			})
 			c.Abort()
 			return

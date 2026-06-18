@@ -46,3 +46,12 @@ func DeleteAccount(db *gorm.DB, id uint) (err error) {
 	err = db.Delete(&Account{}, id).Error
 	return err
 }
+
+func ExistAccount(db *gorm.DB, username string) (exists bool, err error) {
+	var count int64
+	err = db.Model(&Account{}).
+		Where("username = ?", username).
+		Count(&count).
+		Error
+	return count > 0, err
+}
