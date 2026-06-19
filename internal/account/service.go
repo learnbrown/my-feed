@@ -27,7 +27,7 @@ var (
 	ErrAccountNotFound           = errors.New("account not found")
 )
 
-func (service *AccountService) Register(username string, password string) (acc *Account, err error) {
+func (service *AccountService) Register(username string, password string) (*Account, error) {
 	// 去除用户名中的空格
 	username = strings.TrimSpace(username)
 
@@ -56,14 +56,14 @@ func (service *AccountService) Register(username string, password string) (acc *
 		return nil, err
 	}
 
-	acc = &Account{
+	acc := &Account{
 		Username:     username,
 		PasswordHash: string(passwordHash),
 	}
 
 	err = service.repo.CreateAccount(acc)
 	if err != nil {
-		// todo
+		// TODO
 		// 并发场景下可能会触发唯一索引错误
 		// 查重后有用户注册
 		if db.IsDuplicateKeyError(err) {
@@ -75,7 +75,7 @@ func (service *AccountService) Register(username string, password string) (acc *
 	return acc, nil
 }
 
-func (service *AccountService) Login(username string, password string) (acc *Account, err error) {
+func (service *AccountService) Login(username string, password string) (*Account, error) {
 	// 查询用户是否存在
 	username = strings.TrimSpace(username)
 
@@ -83,7 +83,7 @@ func (service *AccountService) Login(username string, password string) (acc *Acc
 		return nil, ErrInvalidUsernameOrPassword
 	}
 
-	acc, err = service.repo.FindAccountByName(username)
+	acc, err := service.repo.FindAccountByName(username)
 	if err != nil {
 		// 用户不存在或密码错误返回相同的信息，避免泄漏用户名是否存在的信息
 		// 将未查到用户和数据库错误的处理分开
@@ -116,16 +116,16 @@ func (service *AccountService) Login(username string, password string) (acc *Acc
 	return acc, nil
 }
 
-func (service *AccountService) Logout(id uint) (err error) {
-	err = service.repo.UpdateToken(id, "")
+func (service *AccountService) Logout(id uint) error {
+	err := service.repo.UpdateToken(id, "")
 	if errors.Is(err, db.ErrRecordNotFound) {
 		return ErrAccountNotFound
 	}
 	return err
 }
 
-func (service *AccountService) Me(id uint) (acc *Account, err error) {
-	acc, err = service.repo.FindAccountByID(id)
+func (service *AccountService) Me(id uint) (*Account, error) {
+	acc, err := service.repo.FindAccountByID(id)
 	if errors.Is(err, db.ErrRecordNotFound) {
 		return nil, ErrAccountNotFound
 	}

@@ -7,7 +7,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// todo 密钥放入配置文件中
+// TODO 密钥放入配置文件中
 var jwtSecret = []byte("private key")
 
 type Claims struct {
@@ -41,7 +41,7 @@ func GenerateToken(accountID uint, username string) (string, error) {
 func ParseToken(tokenString string) (claims *Claims, err error) {
 	claims = new(Claims)
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		// todo 为什么
+		// TODO 为什么
 		// 检查签名算法
 		/*
 			原因是防止“算法混淆”：服务端必须确认 token 用的是自己预期的签名算法，

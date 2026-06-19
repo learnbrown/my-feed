@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// todo 怎么在handler中使用数据库
+// TODO: 怎么在handler中使用数据库
 // 定义Handler结构体，将依赖放入
 type AccountHandler struct {
 	service *AccountService

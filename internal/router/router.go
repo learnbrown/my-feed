@@ -4,6 +4,7 @@ package router
 import (
 	"my_feed/internal/account"
 	"my_feed/internal/middleware"
+	"my_feed/internal/video"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -11,6 +12,7 @@ import (
 
 func InitRouter(db *gorm.DB) (router *gin.Engine) {
 	router = gin.Default()
+	router.Static("/static/uploads", ".run/uploads")
 
 	accountRouter := router.Group("/account")
 	accountRepo := account.NewAccountRepo(db)
@@ -29,6 +31,16 @@ func InitRouter(db *gorm.DB) (router *gin.Engine) {
 			protected.GET("/me", accountHandler.Me)
 		}
 
+	}
+
+	videoRouter := router.Group("/video")
+	// TODO: 这样行吗
+	videoRouter.Use(middleware.JWTAuth(accountRepo))
+	videoRepo := video.NewVideoRepo(db)
+	videoService := video.NewVideoService(videoRepo)
+	videoHandler := video.NewVideoHandler(videoService)
+	{
+		videoRouter.POST("/uploadVideo", videoHandler.UploadVideo)
 	}
 
 	return router
