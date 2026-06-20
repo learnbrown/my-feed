@@ -41,8 +41,7 @@ func GenerateToken(accountID uint, username string) (string, error) {
 func ParseToken(tokenString string) (claims *Claims, err error) {
 	claims = new(Claims)
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		// TODO 为什么
-		// 检查签名算法
+		// [x] 检查签名算法
 		/*
 			原因是防止“算法混淆”：服务端必须确认 token 用的是自己预期的签名算法，
 			不能让攻击者构造一个奇怪算法的 token 来绕验证。

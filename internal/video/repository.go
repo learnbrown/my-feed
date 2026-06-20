@@ -1,6 +1,10 @@
 package video
 
-import "gorm.io/gorm"
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
 
 type VideoRepo struct {
 	db *gorm.DB
@@ -17,13 +21,21 @@ func (repo *VideoRepo) CreateVideo(video *Video) error {
 
 func (repo *VideoRepo) FindVideoByID(id uint) (*Video, error) {
 	video := &Video{}
-	err := repo.db.First(video, id).Error
+	err := repo.db.Where("status = ?", 1).First(video, id).Error
 	return video, err
 }
 
-func (repo *VideoRepo) ListByAuthorID(id uint) (*[]Video, error) {
+// 分页查询，latest_time为游标，查询早于它创建的视频
+func (repo *VideoRepo) ListByAuthorID(authorID uint, limit int, latestTime time.Time) (*[]Video, error) {
 	videos := &[]Video{}
-	err := repo.db.Model(&Video{}).Find(videos, id).Error
+
+	query := repo.db.Model(&Video{}).Where("author_id = ? AND status = ?", authorID, 1)
+
+	if !latestTime.IsZero() {
+		query = query.Where("created_at < ?", latestTime)
+	}
+
+	err := query.Order("created_at desc").Limit(limit).Find(videos).Error
 	return videos, err
 }
 

@@ -63,8 +63,7 @@ func (service *AccountService) Register(username string, password string) (*Acco
 
 	err = service.repo.CreateAccount(acc)
 	if err != nil {
-		// TODO
-		// 并发场景下可能会触发唯一索引错误
+		// [x]并发场景下可能会触发唯一索引错误
 		// 查重后有用户注册
 		if db.IsDuplicateKeyError(err) {
 			return nil, ErrUsernameExists

@@ -45,3 +45,37 @@
 #### Repository 层：只做数据库读写 (CRUD)
 
 实现对数据库的增删改查
+
+
+## V0.2X 视频上传
+
+### latest_time游标分页
+
+`listByAuthorID` 查询作者作品列表时，如果作者有很多视频，一次不能全返回，需要进行分页
+
+`latest_time` 的意思是：给我创建时间早于 latest_time 的视频
+
+第一页时 `latest_time = 0`
+
+```json
+{
+  "author_id": 1,
+  "limit": 20,
+  "latest_time": 0
+}
+```
+服务端返回最新20条视频。取最后一条视频的`created_at`，作为`next_time`
+
+第二页时 `latest_time = next_time`
+
+```json
+{
+  "author_id": 1,
+  "limit": 20,
+  "latest_time": next_time
+}
+```
+
+这样即使中间作者发布了新的视频，第二页也不会被新视频打乱。
+
+实现了从上一页的最后一个视频处，加载20条视频

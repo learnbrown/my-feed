@@ -34,13 +34,19 @@ func InitRouter(db *gorm.DB) (router *gin.Engine) {
 	}
 
 	videoRouter := router.Group("/video")
-	// TODO: 这样行吗
-	videoRouter.Use(middleware.JWTAuth(accountRepo))
 	videoRepo := video.NewVideoRepo(db)
 	videoService := video.NewVideoService(videoRepo)
 	videoHandler := video.NewVideoHandler(videoService)
 	{
-		videoRouter.POST("/uploadVideo", videoHandler.UploadVideo)
+		videoRouter.POST("/getDetail", videoHandler.GetDetail)
+		videoRouter.POST("/listByAuthorID", videoHandler.ListByAuthorID)
+
+		protected := videoRouter.Group("")
+		protected.Use(middleware.JWTAuth(accountRepo))
+		{
+			protected.POST("/publish", videoHandler.PublishVideo)
+
+		}
 	}
 
 	return router
