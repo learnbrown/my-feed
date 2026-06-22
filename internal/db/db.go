@@ -37,7 +37,7 @@ func InitDB() (db *gorm.DB) {
 
 	switch driver {
 	case "sqlite", "sqlite3":
-		dsn = firstNonEmpty(os.Getenv("DB_DSN"), os.Getenv("SQLITE_DSN"), "./data.db")
+		dsn = firstNonEmpty(os.Getenv("DB_DSN"), os.Getenv("SQLITE_DSN"), ".run/database/data.db")
 		db, err = gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	case "mysql":
 		dsn = firstNonEmpty(os.Getenv("DB_DSN"), buildMySQLDSN())

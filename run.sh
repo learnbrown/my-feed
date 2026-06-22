@@ -1,5 +1,5 @@
 #!/bin/sh
 
 go fmt ./...
-go build ./cmd/main.go
-./main
+go build -o build/main ./cmd/main.go
+./build/main
