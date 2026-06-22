@@ -14,20 +14,14 @@ import (
 func InitRouter(db *gorm.DB) (router *gin.Engine) {
 	router = gin.Default()
 
-	// // 允许所有来源、所有方法的跨域请求
-	// config := cors.DefaultConfig()
-	// config.AllowAllOrigins = true
-	// config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization", "Accept"}
-	// router.Use(cors.New(config))
+	router.StaticFile("/", ".run/template/index.html")
 
-	// router.Delims("[[", "]]")
-	// router.LoadHTMLFiles(".run/template/index.html")
-
+	router.Static("/assets", ".run/assets")
 	router.Static("/static/uploads", ".run/uploads")
 
-	// router.GET("/", func(c *gin.Context) {
-	// 	c.HTML(200, "index.html", gin.H{})
-	// })
+	router.NoRoute(func(c *gin.Context) {
+		c.File("./dist/index.html")
+	})
 
 	accountRouter := router.Group("/account")
 	accountRepo := account.NewAccountRepo(db)
