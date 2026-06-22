@@ -50,7 +50,9 @@ func (handler *VideoHandler) PublishVideo(c *gin.Context) {
 				"error": err.Error(),
 			})
 		case errors.Is(err, ErrTitleRequired) ||
-			errors.Is(err, ErrPlayURLRequired):
+			errors.Is(err, ErrPlayURLRequired) ||
+			errors.Is(err, ErrInvalidPlayURL) ||
+			errors.Is(err, ErrInvalidCoverURL):
 
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": err.Error(),
@@ -73,6 +75,7 @@ type DetailRequest struct {
 	ID uint `json:"id" binding:"required"`
 }
 
+// TODO: 更常见的用法为 GET /video/getDetail/:id，先用POST
 func (handler *VideoHandler) GetDetail(c *gin.Context) {
 	input := &DetailRequest{}
 	err := c.ShouldBindJSON(input)
@@ -103,18 +106,14 @@ func (handler *VideoHandler) GetDetail(c *gin.Context) {
 }
 
 // Get video list of author
-// TODO: LatestTime是做什么的
+// [x] LatestTime是做什么的
 // 游标分页，见README
+// TODO 升级为 created_at + id 复合游标
+
 type ListRequest struct {
 	AuthorID   uint  `json:"author_id" binding:"required"`
-	Limit      int   `json:"limit" binding:"required"`
+	Limit      int   `json:"limit"`
 	LatestTime int64 `json:"latest_time"`
-}
-
-type ListResponse struct {
-	Videos   []Video `json:"videos"`
-	NextTime int64   `json:"next_time"`
-	HasMore  bool    `json:"has_more"`
 }
 
 func (handler *VideoHandler) ListByAuthorID(c *gin.Context) {
@@ -134,9 +133,17 @@ func (handler *VideoHandler) ListByAuthorID(c *gin.Context) {
 
 	res, err := handler.service.ListByAuthorID(input.AuthorID, input.Limit, latestTime)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		switch {
+		case errors.Is(err, ErrAuthorRequired):
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": err.Error(),
+			})
+		default:
+
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+		}
 
 		return
 	}
@@ -151,10 +158,87 @@ func (handler *VideoHandler) ListByAuthorID(c *gin.Context) {
 
 // Upload video
 func (handler *VideoHandler) UploadVideo(c *gin.Context) {
- 
+	authorID := c.GetUint("userID")
+	if authorID == 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "user id doesn't exist in context",
+		})
+		return
+	}
+	// [x] 有几种错误还没处理 ErrFileRequired
+	file, err := c.FormFile("video")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	returnDir, err := handler.service.UploadVideo(authorID, file)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrAuthorRequired):
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": err.Error(),
+			})
+		case errors.Is(err, ErrUnsupportedFileType) ||
+			errors.Is(err, ErrFileTooLarge) ||
+			errors.Is(err, ErrFileRequired):
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": err.Error(),
+			})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"play_url": returnDir,
+	})
 }
 
 // Upload cover
 func (handler *VideoHandler) UploadCover(c *gin.Context) {
+	authorID := c.GetUint("userID")
+	if authorID == 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "user id doesn't exist in context",
+		})
+		return
+	}
 
+	file, err := c.FormFile("cover")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	returnDir, err := handler.service.UploadCover(authorID, file)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrAuthorRequired):
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": err.Error(),
+			})
+		case errors.Is(err, ErrUnsupportedFileType) ||
+			errors.Is(err, ErrFileTooLarge) ||
+			errors.Is(err, ErrFileRequired):
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": err.Error(),
+			})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+		}
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"cover_url": returnDir,
+	})
 }
