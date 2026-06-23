@@ -1,10 +1,15 @@
 package video
 
-import "gorm.io/gorm"
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
 
 type Video struct {
 	gorm.Model
-	AuthorID uint   `gorm:"index;not null" json:"author_id"`
+
+	AuthorID uint   `gorm:"index:idx_videos_author_created_at,priority:1;not null" json:"author_id"`
 	Title    string `gorm:"size:128;not null" json:"title"`
 
 	// 视频描述 可选；后续可以从这里提取 `#话题`
@@ -23,11 +28,14 @@ type Video struct {
 	Popularity uint `gorm:"default:0" json:"popularity"`
 	// 视频状态 `1` 表示正常；以后可扩展为审核中、删除、封禁
 	Status int `gorm:"default:1" json:"status"`
+
+	// 显式覆盖gorm.Model 创建联合索引
+	CreatedAt time.Time `gorm:"index:idx_videos_author_created_at,priority:2;index:idx_videos_created_at"`
 }
 
 type Tag struct {
 	gorm.Model
-	Name string `gorm:"index;unique;not null" json:"name"`
+	Name string `gorm:"uniqueIndex:uk_tags_name;not null" json:"name"`
 }
 
 // [x] 怎么实现unique(video_id, tag_id) -> uniqueIndex:uk_video_tag

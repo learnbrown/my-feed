@@ -16,7 +16,7 @@ func NewFeedHandler(service *FeedService) *FeedHandler {
 	return &FeedHandler{service: service}
 }
 
-// 定义请求格式
+// list_latest请求格式
 type ListLatestRequest struct {
 	Limit      int   `json:"limit"`
 	LatestTime int64 `json:"latest_time"`
@@ -54,6 +54,7 @@ func (handler *FeedHandler) ListLatest(c *gin.Context) {
 	})
 }
 
+// list_by_tag 请求格式
 type ListByTagRequest struct {
 	TagName    string `json:"tag_name" binding:"required"`
 	Limit      int    `json:"limit"`

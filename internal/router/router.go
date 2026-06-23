@@ -4,6 +4,7 @@ package router
 import (
 	"my_feed/internal/account"
 	"my_feed/internal/feed"
+	"my_feed/internal/like"
 	"my_feed/internal/middleware"
 	"my_feed/internal/video"
 
@@ -65,6 +66,18 @@ func InitRouter(db *gorm.DB) (router *gin.Engine) {
 	{
 		feedRouter.POST("/listLatest", feedHandler.ListLatest)
 		feedRouter.POST("/listByTag", feedHandler.ListByTag)
+	}
+
+	likeRouter := router.Group("/like")
+	likeRouter.Use(middleware.JWTAuth(accountRepo))
+	likeRepo := like.NewLikeRepo(db)
+	likeService := like.NewLikeService(likeRepo)
+	likeHandler := like.NewLikeHandler(likeService)
+	{
+		likeRouter.POST("/like", likeHandler.Like)
+		likeRouter.POST("/unlike", likeHandler.Unlike)
+		likeRouter.POST("/isLiked", likeHandler.IsLiked)
+		likeRouter.POST("/listLikedVideos", likeHandler.ListLikedVideos)
 	}
 
 	return router

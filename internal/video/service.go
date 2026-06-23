@@ -139,6 +139,7 @@ func (service *VideoService) GetDetail(id uint) (*Video, error) {
 	return video, err
 }
 
+// 向handler返回list的结构
 type ListResponse struct {
 	Videos   []Video `json:"videos"`
 	NextTime int64   `json:"next_time"`

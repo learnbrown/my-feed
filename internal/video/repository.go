@@ -125,3 +125,41 @@ func (repo *VideoRepo) ListByTag(tagName string, limit int, latestTime time.Time
 
 	return videos, err
 }
+
+// [x] 点赞数应该由谁获取？就你
+func (repo *VideoRepo) IncreaseLikesCount(id uint) error {
+	res := repo.db.Model(&Video{}).
+		Where("id = ? AND status = 1", id).
+		UpdateColumn("likes_count", gorm.Expr("likes_count + ?", 1))
+
+	if res.Error != nil {
+		return res.Error
+	}
+	// 还应检查RowsAffected，如果视频不存在、状态不对、或者 likes_count > 0 条件没命中，Error 仍可能是 nil
+	if res.RowsAffected == 0 {
+		return db.ErrRecordNotFound
+	}
+	return nil
+}
+
+func (repo *VideoRepo) DecreaseLikesCount(id uint) error {
+	res := repo.db.Model(&Video{}).
+		Where("id = ? AND likes_count > 0 AND status = 1", id).
+		UpdateColumn("likes_count", gorm.Expr("likes_count - ?", 1))
+
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return db.ErrRecordNotFound
+	}
+
+	return nil
+}
+
+func (repo *VideoRepo) GetLikesCount(id uint) (uint, error) {
+	video := &Video{}
+	err := repo.db.First(video, id).Error
+
+	return video.LikesCount, err
+}
