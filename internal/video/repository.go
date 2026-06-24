@@ -168,3 +168,45 @@ func (repo *VideoRepo) GetLikesCount(id uint) (uint, error) {
 
 	return video.LikesCount, err
 }
+
+// TODO: 维护评论数字段
+func (repo *VideoRepo) IncreaseCommentsCount(id uint) error {
+	res := repo.db.Model(&Video{}).
+		Where("id = ? AND status = 1", id).
+		UpdateColumn("comments_count", gorm.Expr("comments_count + ?", 1))
+
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return db.ErrRecordNotFound
+	}
+	return nil
+}
+
+func (repo *VideoRepo) DecreaseCommentsCount(id uint) error {
+	res := repo.db.Model(&Video{}).
+		Where("id = ? AND comments_count > 0 AND status = 1", id).
+		UpdateColumn("comments_count", gorm.Expr("comments_count - ?", 1))
+
+	if res.Error != nil {
+		return res.Error
+	}
+	// TODO: RowsAffected = 0 不一定是视频不存在，有三种情况：
+	// 视频不存在
+	// 视频 status != 1
+	// comments_count 已经是 0
+	// 通常情况是comments_count 已经是 0，后面改成更明确的错误
+	if res.RowsAffected == 0 {
+		return db.ErrRecordNotFound
+	}
+
+	return nil
+}
+
+func (repo *VideoRepo) GetCommentsCount(id uint) (uint, error) {
+	video := &Video{}
+	err := repo.db.First(video, id).Error
+
+	return video.CommentsCount, err
+}

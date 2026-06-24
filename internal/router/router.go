@@ -3,6 +3,7 @@ package router
 
 import (
 	"my_feed/internal/account"
+	"my_feed/internal/comment"
 	"my_feed/internal/feed"
 	"my_feed/internal/like"
 	"my_feed/internal/middleware"
@@ -78,6 +79,21 @@ func InitRouter(db *gorm.DB) (router *gin.Engine) {
 		likeRouter.POST("/unlike", likeHandler.Unlike)
 		likeRouter.POST("/isLiked", likeHandler.IsLiked)
 		likeRouter.POST("/listLikedVideos", likeHandler.ListLikedVideos)
+	}
+
+	commentRouter := router.Group("/comment")
+	commentRepo := comment.NewCommentRepo(db)
+	commentService := comment.NewCommentService(commentRepo)
+	commentHandler := comment.NewCommentHandler(commentService)
+	{
+		commentRouter.POST("/listComment", commentHandler.ListComment)
+
+		protected := commentRouter.Group("")
+		protected.Use(middleware.JWTAuth(accountRepo))
+		{
+			protected.POST("/publish", commentHandler.Publish)
+			protected.POST("/delete", commentHandler.Delete)
+		}
 	}
 
 	return router
