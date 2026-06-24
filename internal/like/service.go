@@ -60,6 +60,9 @@ func (service *LikeService) Like(accountID, videoID uint) (uint, error) {
 		// 更新video字段
 		err = videoRepo.IncreaseLikesCount(videoID)
 		if err != nil {
+			if errors.Is(err, db.ErrRecordNotFound) {
+				return ErrVideoNotFound
+			}
 			return err
 		}
 
@@ -113,6 +116,9 @@ func (service *LikeService) Unlike(accountID, videoID uint) (uint, error) {
 		// 更新video字段
 		err = videoRepo.DecreaseLikesCount(videoID)
 		if err != nil {
+			if errors.Is(err, db.ErrRecordNotFound) {
+				return ErrVideoNotFound
+			}
 			return err
 		}
 
@@ -145,6 +151,9 @@ type ListLikedResponse struct {
 }
 
 func (service *LikeService) ListLikedVideos(accountID uint, limit int, latestTime time.Time) (*ListLikedResponse, error) {
+	if accountID == 0 {
+		return nil, ErrAuthorRequired
+	}
 	if limit > 50 {
 		limit = 50
 	}

@@ -150,6 +150,11 @@ func (repo *VideoRepo) DecreaseLikesCount(id uint) error {
 	if res.Error != nil {
 		return res.Error
 	}
+	// TODO: RowsAffected = 0 不一定是视频不存在，有三种情况：
+	// 视频不存在
+	// 视频 status != 1
+	// likes_count 已经是 0
+	// 通常情况是likes_count 已经是 0，后面改成更明确的错误
 	if res.RowsAffected == 0 {
 		return db.ErrRecordNotFound
 	}

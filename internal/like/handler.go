@@ -42,6 +42,10 @@ func (handler *LikeHandler) Like(c *gin.Context) {
 	likesCount, err := handler.service.Like(accountID, input.VideoID)
 	if err != nil {
 		switch {
+		case errors.Is(err, ErrVideoRequired):
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": err.Error(),
+			})
 		case errors.Is(err, ErrVideoNotFound):
 			c.JSON(http.StatusNotFound, gin.H{
 				"error": err.Error(),
@@ -85,6 +89,10 @@ func (handler *LikeHandler) Unlike(c *gin.Context) {
 	likesCount, err := handler.service.Unlike(accountID, input.VideoID)
 	if err != nil {
 		switch {
+		case errors.Is(err, ErrVideoRequired):
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": err.Error(),
+			})
 		case errors.Is(err, ErrVideoNotFound):
 			c.JSON(http.StatusNotFound, gin.H{
 				"error": err.Error(),
@@ -180,6 +188,12 @@ func (handler *LikeHandler) ListLikedVideos(c *gin.Context) {
 
 	res, err := handler.service.ListLikedVideos(accountID, input.Limit, latestTime)
 	if err != nil {
+		if errors.Is(err, ErrAuthorRequired) {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
