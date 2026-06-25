@@ -7,6 +7,7 @@ import (
 	"my_feed/internal/feed"
 	"my_feed/internal/follow"
 	"my_feed/internal/like"
+	"my_feed/internal/message"
 	"my_feed/internal/middleware"
 	"my_feed/internal/video"
 
@@ -112,6 +113,16 @@ func InitRouter(db *gorm.DB) (router *gin.Engine) {
 			protected.POST("/follow", followHandler.Follow)
 			protected.POST("/unfollow", followHandler.Unfollow)
 		}
+	}
+
+	messageRouter := router.Group("/message")
+	messageRouter.Use(middleware.JWTAuth(accountRepo))
+	messageRepo := message.NewMessageRepo(db)
+	messageService := message.NewMessageService(messageRepo, accountRepo)
+	messageHandler := message.NewMessageHandler(messageService)
+	{
+		messageRouter.POST("/sendMsg", messageHandler.SendMessage)
+		messageRouter.POST("/listConversation", messageHandler.ListConversation)
 	}
 
 	return router

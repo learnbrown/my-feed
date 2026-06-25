@@ -3,6 +3,7 @@ package db
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 
@@ -37,9 +38,11 @@ func InitDB() (db *gorm.DB) {
 
 	switch driver {
 	case "sqlite", "sqlite3":
+		log.Println("database settings: sqlite3")
 		dsn = firstNonEmpty(os.Getenv("DB_DSN"), os.Getenv("SQLITE_DSN"), ".run/database/data.db")
 		db, err = gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	case "mysql":
+		log.Println("database settings: mysql")
 		dsn = firstNonEmpty(os.Getenv("DB_DSN"), buildMySQLDSN())
 		db, err = gorm.Open(gormmysql.Open(dsn), &gorm.Config{})
 	default:
@@ -58,7 +61,7 @@ func buildMySQLDSN() string {
 	password := getEnv("MYSQL_PASSWORD", "qwerdf")
 	host := getEnv("MYSQL_HOST", "127.0.0.1")
 	port := getEnv("MYSQL_PORT", "3306")
-	database := getEnv("MYSQL_DATABASE", "db001")
+	database := getEnv("MYSQL_DATABASE", "myfeed")
 	params := getEnv("MYSQL_PARAMS", "charset=utf8mb4&parseTime=True&loc=Local")
 
 	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?%s", user, password, host, port, database, params)

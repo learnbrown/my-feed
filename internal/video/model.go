@@ -35,7 +35,7 @@ type Video struct {
 
 type Tag struct {
 	gorm.Model
-	Name string `gorm:"uniqueIndex:uk_tags_name;not null" json:"name"`
+	Name string `gorm:"size:32;uniqueIndex:uk_tags_name;not null" json:"name"`
 }
 
 // [x] 怎么实现unique(video_id, tag_id) -> uniqueIndex:uk_video_tag
