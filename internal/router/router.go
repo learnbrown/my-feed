@@ -5,6 +5,7 @@ import (
 	"my_feed/internal/account"
 	"my_feed/internal/comment"
 	"my_feed/internal/feed"
+	"my_feed/internal/follow"
 	"my_feed/internal/like"
 	"my_feed/internal/middleware"
 	"my_feed/internal/video"
@@ -93,6 +94,23 @@ func InitRouter(db *gorm.DB) (router *gin.Engine) {
 		{
 			protected.POST("/publish", commentHandler.Publish)
 			protected.POST("/delete", commentHandler.Delete)
+		}
+	}
+
+	followRouter := router.Group("/follow")
+	followRepo := follow.NewFollowRepo(db)
+	followService := follow.NewFollowService(followRepo, accountRepo)
+	followHandler := follow.NewFollowHandler(followService)
+	{
+		followRouter.POST("/listFollower", followHandler.ListFollower)
+		followRouter.POST("/listFollowing", followHandler.ListFollowing)
+
+		protected := followRouter.Group("")
+		protected.Use(middleware.JWTAuth(accountRepo))
+		{
+			protected.POST("/isFollowing", followHandler.IsFollowing)
+			protected.POST("/follow", followHandler.Follow)
+			protected.POST("/unfollow", followHandler.Unfollow)
 		}
 	}
 
