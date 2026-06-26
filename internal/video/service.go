@@ -49,7 +49,20 @@ var (
 
 var tagRegex = regexp.MustCompile(`#[\p{L}\p{N}_+]+`)
 
-func (service *VideoService) Publish(authorID uint, title, description, video_url, cover_url string) (*Video, error) {
+// video DTO 隐藏不需要的字段
+type VideoDTO struct {
+	ID            uint   `json:"id"`
+	AuthorID      uint   `json:"author_id"`
+	Title         string `json:"title"`
+	Description   string `json:"description"`
+	PlayURL       string `json:"play_url"`
+	CoverURL      string `json:"cover_url"`
+	LikesCount    uint   `json:"likes_count"`
+	CommentsCount uint   `json:"comments_count"`
+	CreatedAt     int64  `json:"created_at"`
+}
+
+func (service *VideoService) Publish(authorID uint, title, description, video_url, cover_url string) (*VideoDTO, error) {
 	// [x] 缺少业务校验
 	if authorID == 0 {
 		return nil, ErrAuthorRequired
@@ -128,22 +141,46 @@ func (service *VideoService) Publish(authorID uint, title, description, video_ur
 		return nil, err
 	}
 
-	return video, err
+	dto := &VideoDTO{
+		ID:            video.ID,
+		AuthorID:      video.AuthorID,
+		Title:         video.Title,
+		Description:   video.Description,
+		PlayURL:       video.PlayURL,
+		CoverURL:      video.CoverURL,
+		LikesCount:    video.LikesCount,
+		CommentsCount: video.CommentsCount,
+		CreatedAt:     video.CreatedAt.UnixMilli(),
+	}
+
+	return dto, err
 }
 
-func (service *VideoService) GetDetail(id uint) (*Video, error) {
+func (service *VideoService) GetDetail(id uint) (*VideoDTO, error) {
 	video, err := service.repo.FindVideoByID(id)
 	if errors.Is(err, db.ErrRecordNotFound) {
 		return nil, ErrVideoNotFound
 	}
-	return video, err
+
+	dto := &VideoDTO{
+		ID:            video.ID,
+		AuthorID:      video.AuthorID,
+		Title:         video.Title,
+		Description:   video.Description,
+		PlayURL:       video.PlayURL,
+		CoverURL:      video.CoverURL,
+		LikesCount:    video.LikesCount,
+		CommentsCount: video.CommentsCount,
+		CreatedAt:     video.CreatedAt.UnixMilli(),
+	}
+	return dto, err
 }
 
 // 向handler返回list的结构
 type ListResponse struct {
-	Videos   []Video `json:"videos"`
-	NextTime int64   `json:"next_time"`
-	HasMore  bool    `json:"has_more"`
+	Videos   []VideoDTO `json:"videos"`
+	NextTime int64      `json:"next_time"`
+	HasMore  bool       `json:"has_more"`
 }
 
 func (service *VideoService) ListByAuthorID(authorID uint, limit int, latestTime time.Time) (*ListResponse, error) {
@@ -176,8 +213,23 @@ func (service *VideoService) ListByAuthorID(authorID uint, limit int, latestTime
 		nextTime = (*videos)[len(*videos)-1].CreatedAt.UnixMilli()
 	}
 
+	dtos := make([]VideoDTO, len(*videos))
+	for i, v := range *videos {
+		dtos[i] = VideoDTO{
+			ID:            v.ID,
+			AuthorID:      v.AuthorID,
+			Title:         v.Title,
+			Description:   v.Description,
+			PlayURL:       v.PlayURL,
+			CoverURL:      v.CoverURL,
+			LikesCount:    v.LikesCount,
+			CommentsCount: v.CommentsCount,
+			CreatedAt:     v.CreatedAt.UnixMilli(),
+		}
+	}
+
 	res := &ListResponse{
-		Videos:   *videos,
+		Videos:   dtos,
 		NextTime: nextTime,
 		HasMore:  hasMore,
 	}

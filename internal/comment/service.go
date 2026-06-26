@@ -27,7 +27,15 @@ func NewCommentService(repo *CommentRepo) *CommentService {
 	return &CommentService{repo: repo}
 }
 
-func (service *CommentService) CreateComment(accountID, videoID uint, content string) (*Comment, uint, error) {
+type CommentDTO struct {
+	ID        uint   `json:"id"`
+	VideoID   uint   `json:"video_id"`
+	AccountID uint   `json:"account_id"`
+	Content   string `json:"content"`
+	CreatedAt int64  `json:"created_at"`
+}
+
+func (service *CommentService) CreateComment(accountID, videoID uint, content string) (*CommentDTO, uint, error) {
 	if accountID == 0 {
 		return nil, 0, ErrAuthorRequired
 	}
@@ -80,7 +88,15 @@ func (service *CommentService) CreateComment(accountID, videoID uint, content st
 		return nil
 	})
 
-	return comment, commentsCount, err
+	dto := &CommentDTO{
+		ID:        comment.ID,
+		VideoID:   comment.VideoID,
+		AccountID: comment.AccountID,
+		Content:   comment.Content,
+		CreatedAt: comment.CreatedAt.UnixMilli(),
+	}
+
+	return dto, commentsCount, err
 }
 
 func (service *CommentService) DeleteComment(accountID, commentID uint) (uint, error) {
@@ -137,7 +153,7 @@ func (service *CommentService) DeleteComment(accountID, commentID uint) (uint, e
 
 // listComment返回类型
 type ListCommentResponse struct {
-	Comments *[]Comment
+	Comments []CommentDTO
 	HasMore  bool
 	NextTime int64
 }
@@ -170,8 +186,19 @@ func (service *CommentService) ListComment(videoID uint, limit int, latestTime t
 		nextTime = (*comments)[len(*comments)-1].CreatedAt.UnixMilli()
 	}
 
+	dtos := make([]CommentDTO, len(*comments))
+	for i, c := range *comments {
+		dtos[i] = CommentDTO{
+			ID:        c.ID,
+			VideoID:   c.VideoID,
+			AccountID: c.AccountID,
+			Content:   c.Content,
+			CreatedAt: c.CreatedAt.UnixMilli(),
+		}
+	}
+
 	return &ListCommentResponse{
-		Comments: comments,
+		Comments: dtos,
 		HasMore:  hasMore,
 		NextTime: nextTime,
 	}, err

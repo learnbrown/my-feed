@@ -22,6 +22,14 @@ type FollowList struct {
 	FollowedAt time.Time `json:"followed_at"`
 }
 
+type FollowListDTO struct {
+	ID         uint   `json:"id"`
+	Username   string `json:"username"`
+	AvatarURL  string `json:"avatar_url"`
+	Bio        string `json:"bio"`
+	FollowedAt int64  `json:"followed_at"`
+}
+
 type FollowService struct {
 	followRepo  *FollowRepo
 	accountRepo *account.AccountRepo
@@ -98,9 +106,9 @@ func (service *FollowService) Unfollow(followerID, vloggerID uint) error {
 
 // listFollower/listFollowing 返回类型
 type ListFollowResponse struct {
-	Follows  *[]FollowList `json:"follows"` // 博主/粉丝列表
-	HasMore  bool          `json:"has_more"`
-	NextTime int64         `json:"next_time"`
+	Follows  *[]FollowListDTO `json:"follows"` // 博主/粉丝列表
+	HasMore  bool             `json:"has_more"`
+	NextTime int64            `json:"next_time"`
 }
 
 func (service *FollowService) ListFollower(vloggerID uint, limit int, latestTime time.Time) (*ListFollowResponse, error) {
@@ -138,8 +146,19 @@ func (service *FollowService) ListFollower(vloggerID uint, limit int, latestTime
 		nextTime = (*followerList)[len(*followerList)-1].FollowedAt.UnixMilli()
 	}
 
+	dtos := make([]FollowListDTO, len(*followerList))
+	for i, f := range *followerList {
+		dtos[i] = FollowListDTO{
+			ID:         f.ID,
+			Username:   f.Username,
+			AvatarURL:  f.AvatarURL,
+			Bio:        f.Bio,
+			FollowedAt: f.FollowedAt.UnixMilli(),
+		}
+	}
+
 	return &ListFollowResponse{
-		Follows:  followerList,
+		Follows:  &dtos,
 		HasMore:  hasMore,
 		NextTime: nextTime,
 	}, nil
@@ -180,8 +199,19 @@ func (service *FollowService) ListFollowing(followerID uint, limit int, latestTi
 		nextTime = (*followingList)[len(*followingList)-1].FollowedAt.UnixMilli()
 	}
 
+	dtos := make([]FollowListDTO, len(*followingList))
+	for i, f := range *followingList {
+		dtos[i] = FollowListDTO{
+			ID:         f.ID,
+			Username:   f.Username,
+			AvatarURL:  f.AvatarURL,
+			Bio:        f.Bio,
+			FollowedAt: f.FollowedAt.UnixMilli(),
+		}
+	}
+
 	return &ListFollowResponse{
-		Follows:  followingList,
+		Follows:  &dtos,
 		HasMore:  hasMore,
 		NextTime: nextTime,
 	}, nil

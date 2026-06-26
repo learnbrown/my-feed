@@ -27,7 +27,15 @@ func NewMessageService(msgRepo *MessageRepo, accountRepo *account.AccountRepo) *
 	return &MessageService{msgRepo: msgRepo, accountRepo: accountRepo}
 }
 
-func (service *MessageService) SendMessage(fromID, toID uint, content string) (*Message, error) {
+type MessageDTO struct {
+	ID        uint   `json:"id"`
+	FromID    uint   `json:"from_id"`
+	ToID      uint   `json:"to_id"`
+	Content   string `json:"content"`
+	CreatedAt int64  `json:"created_at"`
+}
+
+func (service *MessageService) SendMessage(fromID, toID uint, content string) (*MessageDTO, error) {
 	if fromID == 0 {
 		return nil, ErrSenderRequired
 	}
@@ -56,14 +64,24 @@ func (service *MessageService) SendMessage(fromID, toID uint, content string) (*
 		return nil, ErrContentTooLarge
 	}
 
-	return service.msgRepo.SendMessage(fromID, toID, content)
+	msg, err := service.msgRepo.SendMessage(fromID, toID, content)
+
+	dto := &MessageDTO{
+		ID:        msg.ID,
+		FromID:    msg.FromID,
+		ToID:      msg.ToID,
+		Content:   msg.Content,
+		CreatedAt: msg.CreatedAt.UnixMilli(),
+	}
+
+	return dto, err
 }
 
 // listConversation 响应格式
 type ListCvsResponse struct {
-	Messages *[]Message `json:"messages"`
-	HasMore  bool       `json:"has_more"`
-	NextTime int64      `json:"next_time"`
+	Messages []MessageDTO `json:"messages"`
+	HasMore  bool         `json:"has_more"`
+	NextTime int64        `json:"next_time"`
 }
 
 func (service *MessageService) ListConversation(fromID, toID uint, limit int, latestTime time.Time) (*ListCvsResponse, error) {
@@ -108,8 +126,19 @@ func (service *MessageService) ListConversation(fromID, toID uint, limit int, la
 		nextTime = (*messages)[len(*messages)-1].CreatedAt.UnixMilli()
 	}
 
+	dtos := make([]MessageDTO, len(*messages))
+	for i, m := range *messages {
+		dtos[i] = MessageDTO{
+			ID:        m.ID,
+			FromID:    m.FromID,
+			ToID:      m.ToID,
+			Content:   m.Content,
+			CreatedAt: m.CreatedAt.UnixMilli(),
+		}
+	}
+
 	return &ListCvsResponse{
-		Messages: messages,
+		Messages: dtos,
 		HasMore:  hasMore,
 		NextTime: nextTime,
 	}, nil

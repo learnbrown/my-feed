@@ -34,13 +34,11 @@ Status: `200 OK`
 ```json
 {
   "message": {
-    "ID": 11,
+    "id": 16,
     "from_id": 2,
     "to_id": 1,
     "content": "这是一条测试消息",
-    "CreatedAt": "2026-06-25T22:24:35.411+08:00",
-    "UpdatedAt": "2026-06-25T22:24:35.411+08:00",
-    "DeletedAt": null
+    "created_at": 1782485270704
   }
 }
 ```
@@ -92,17 +90,15 @@ Status: `200 OK`
 {
   "messages": [
     {
-      "ID": 11,
+      "id": 16,
       "from_id": 2,
       "to_id": 1,
       "content": "这是一条测试消息",
-      "CreatedAt": "2026-06-25T22:24:35.411+08:00",
-      "UpdatedAt": "2026-06-25T22:24:35.411+08:00",
-      "DeletedAt": null
+      "created_at": 1782485270704
     }
   ],
   "has_more": true,
-  "next_time": 1782397473337
+  "next_time": 1782399223154
 }
 ```
 

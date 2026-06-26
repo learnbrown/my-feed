@@ -126,19 +126,15 @@ Status: `201 Created`
 ```json
 {
   "video": {
-    "ID": 26,
-    "CreatedAt": "2026-06-21T16:16:22.707788517+08:00",
-    "UpdatedAt": "2026-06-21T16:16:22.707788517+08:00",
-    "DeletedAt": null,
-    "author_id": 1,
-    "title": "First video #go #gin",
-    "description": "feed system #gorm",
-    "play_url": "/static/uploads/videos/1/20260621/1782029781170370643_58358.mp4",
-    "cover_url": "/static/uploads/covers/1/20260621/1782029119631490429_89459.png",
+    "id": 32,
+    "author_id": 2,
+    "title": "First video #GO #gin #gorm",
+    "description": "feed system #development #GO",
+    "play_url": "/static/uploads/videos/2/20260626/1782484933623067701_59746.mp4",
+    "cover_url": "/static/uploads/covers/default.png",
     "likes_count": 0,
     "comments_count": 0,
-    "popularity": 0,
-    "status": 1
+    "created_at": 1782484935444
   }
 }
 ```
@@ -183,19 +179,15 @@ Status: `200 OK`
 ```json
 {
   "video": {
-    "ID": 26,
-    "CreatedAt": "2026-06-21T16:16:22.707788517+08:00",
-    "UpdatedAt": "2026-06-21T16:16:22.707788517+08:00",
-    "DeletedAt": null,
+    "id": 26,
     "author_id": 1,
-    "title": "First video #go #gin",
-    "description": "feed system #gorm",
-    "play_url": "/static/uploads/videos/1/20260621/1782029781170370643_58358.mp4",
-    "cover_url": "/static/uploads/covers/default.png",
+    "title": "Drone Aerial View Of Seattle Skyline With Space Needle",
+    "description": "这是一段由 Pexels 创作者 Josh Hild 拍摄的低分辨率测试视频。极小体积，适合本地压测。ID: 35033742。 #city #test_data #low_res",
+    "play_url": "/static/uploads/videos/1/20260625/1782371434559115240_86096.mp4",
+    "cover_url": "/static/uploads/covers/1/20260625/1782371434567647409_19104.jpg",
     "likes_count": 0,
     "comments_count": 0,
-    "popularity": 0,
-    "status": 1
+    "created_at": 1782371434573
   }
 }
 ```
@@ -243,23 +235,19 @@ Status: `200 OK`
 
 ```json
 {
-  "has_more": false,
-  "next_time": 1781950727842,
+  "has_more": true,
+  "next_time": 1782371434346,
   "videos": [
     {
-      "ID": 26,
-      "CreatedAt": "2026-06-21T16:16:22.707788517+08:00",
-      "UpdatedAt": "2026-06-21T16:16:22.707788517+08:00",
-      "DeletedAt": null,
+      "id": 31,
       "author_id": 1,
-      "title": "First video #go #gin",
-      "description": "feed system #gorm",
-      "play_url": "/static/uploads/videos/1/20260621/1782029781170370643_58358.mp4",
+      "title": "First video #GO #gin #gorm",
+      "description": "feed system #development #GO",
+      "play_url": "/static/uploads/videos/1/20260626/1782482677973872449_49663.mp4",
       "cover_url": "/static/uploads/covers/default.png",
       "likes_count": 0,
       "comments_count": 0,
-      "popularity": 0,
-      "status": 1
+      "created_at": 1782482684898
     }
   ]
 }

@@ -165,26 +165,22 @@ Status: `200 OK`
 
 ```json
 {
-  "has_more": false,
+  "has_more": true,
   "likes": [
     {
-      "ID": 1,
-      "UpdatedAt": "2026-06-23T22:42:54.988391537+08:00",
-      "DeletedAt": null,
+      "id": 28,
       "author_id": 1,
-      "title": "First video #GO #gin #gorm",
-      "description": "feed system #development #GO",
-      "play_url": "/static/uploads/videos/1/20260623/1782225767603097957_55811.mp4",
-      "cover_url": "/static/uploads/covers/1/20260623/1782225772735292875_50825.png",
+      "title": "Urban Cityscape In Overcast Weather",
+      "description": "这是一段由 Pexels 创作者 Yunus KARA 拍摄的低分辨率测试视频。极小体积，适合本地压测。ID: 36194544。 #city #test_data #low_res",
+      "play_url": "/static/uploads/videos/1/20260625/1782371434653425496_00768.mp4",
+      "cover_url": "/static/uploads/covers/1/20260625/1782371434662272057_58628.jpg",
       "likes_count": 1,
       "comments_count": 0,
-      "popularity": 0,
-      "status": 1,
-      "CreatedAt": "2026-06-23T22:42:54.988391537+08:00",
-      "LikedAt": "2026-06-23T22:49:12.669080241+08:00"
+      "created_at": 1782371434668,
+      "liked_at": 1782481722006
     }
   ],
-  "next_time": 1782226152669
+  "next_time": 1782371254336
 }
 ```
 

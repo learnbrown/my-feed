@@ -33,23 +33,19 @@ Status: `200 OK`
 
 ```json
 {
-  "has_more": false,
-  "next_time": 1781950727842,
+  "has_more": true,
+  "next_time": 1782371434668,
   "videos": [
     {
-      "ID": 33,
-      "CreatedAt": "2026-06-22T11:09:38.194827956+08:00",
-      "UpdatedAt": "2026-06-22T11:09:38.194827956+08:00",
-      "DeletedAt": null,
-      "author_id": 1,
-      "title": "First video #go #gin",
-      "description": "feed system #gorm",
-      "play_url": "/static/uploads/videos/1/20260622/1782097776037592606_92258.mp4",
+      "id": 32,
+      "author_id": 2,
+      "title": "First video #GO #gin #gorm",
+      "description": "feed system #development #GO",
+      "play_url": "/static/uploads/videos/2/20260626/1782484933623067701_59746.mp4",
       "cover_url": "/static/uploads/covers/default.png",
       "likes_count": 0,
       "comments_count": 0,
-      "popularity": 0,
-      "status": 1
+      "created_at": 1782484935444
     }
   ]
 }
@@ -98,22 +94,18 @@ Status: `200 OK`
 ```json
 {
   "has_more": false,
-  "next_time": 1782116861497,
+  "next_time": 1782482684898,
   "videos": [
     {
-      "ID": 34,
-      "CreatedAt": "2026-06-22T16:27:41.497388754+08:00",
-      "UpdatedAt": "2026-06-22T16:27:41.497388754+08:00",
-      "DeletedAt": null,
-      "author_id": 1,
-      "title": "First video #go #gin",
-      "description": "feed system #gorm",
-      "play_url": "/static/uploads/videos/1/20260622/1782116858305691268_62898.mp4",
+      "id": 32,
+      "author_id": 2,
+      "title": "First video #GO #gin #gorm",
+      "description": "feed system #development #GO",
+      "play_url": "/static/uploads/videos/2/20260626/1782484933623067701_59746.mp4",
       "cover_url": "/static/uploads/covers/default.png",
       "likes_count": 0,
       "comments_count": 0,
-      "popularity": 0,
-      "status": 1
+      "created_at": 1782484935444
     }
   ]
 }

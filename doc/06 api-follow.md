@@ -167,18 +167,15 @@ Status: `200 OK`
 {
   "accounts": [
     {
-      "ID": 2,
-      "CreatedAt": "2026-06-24T09:33:40.471782601+08:00",
-      "UpdatedAt": "2026-06-25T11:17:34.283990772+08:00",
-      "DeletedAt": null,
+      "id": 2,
       "username": "user2",
       "avatar_url": "",
       "bio": "",
-      "followed_at": "2026-06-25T11:20:24.380349184+08:00"
+      "followed_at": 1782481739250
     }
   ],
   "has_more": false,
-  "next_time": 1782264820471
+  "next_time": 1782481739250
 }
 ```
 
@@ -212,7 +209,7 @@ Status: `200 OK`
 
 ```json
 {
-  "account_id": 1
+  "account_id": 2
 }
 ```
 
@@ -224,18 +221,15 @@ Status: `200 OK`
 {
   "accounts": [
     {
-      "ID": 2,
-      "CreatedAt": "2026-06-24T09:33:40.471782601+08:00",
-      "UpdatedAt": "2026-06-25T11:17:34.283990772+08:00",
-      "DeletedAt": null,
-      "username": "user2",
+      "id": 1,
+      "username": "user",
       "avatar_url": "",
       "bio": "",
-      "followed_at": "2026-06-25T11:20:24.380349184+08:00"
+      "followed_at": 1782481739250
     }
   ],
   "has_more": false,
-  "next_time": 1782264820471
+  "next_time": 1782481739250
 }
 ```
 

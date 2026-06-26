@@ -34,15 +34,13 @@ Status: `201 Created`
 ```json
 {
   "comment": {
-    "ID": 5,
-    "video_id": 1,
+    "id": 8,
+    "video_id": 26,
     "account_id": 2,
     "content": "这是一条测试评论，111，111，111",
-    "CreatedAt": "2026-06-24T17:09:00.942509029+08:00",
-    "UpdatedAt": "2026-06-24T17:09:00.942509029+08:00",
-    "DeletedAt": null
+    "created_at": 1782485181120
   },
-  "comments_count": 4
+  "comments_count": 1
 }
 ```
 
@@ -137,17 +135,15 @@ Status: `200 OK`
 {
   "comments": [
     {
-      "ID": 3,
-      "video_id": 1,
-      "account_id": 1,
+      "id": 8,
+      "video_id": 26,
+      "account_id": 2,
       "content": "这是一条测试评论，111，111，111",
-      "CreatedAt": "2026-06-24T16:28:02.639998916+08:00",
-      "UpdatedAt": "2026-06-24T16:28:02.639998916+08:00",
-      "DeletedAt": null
+      "created_at": 1782485181120
     }
   ],
   "has_more": false,
-  "next_time": 1782289680750
+  "next_time": 1782485181120
 }
 ```
 
