@@ -9,6 +9,7 @@ import (
 	"my_feed/internal/like"
 	"my_feed/internal/message"
 	"my_feed/internal/middleware"
+	"my_feed/internal/profile"
 	"my_feed/internal/video"
 
 	"github.com/gin-gonic/gin"
@@ -124,6 +125,10 @@ func InitRouter(db *gorm.DB) (router *gin.Engine) {
 		messageRouter.POST("/sendMsg", messageHandler.SendMessage)
 		messageRouter.POST("/listConversation", messageHandler.ListConversation)
 	}
+
+	profileService := profile.NewProfileService(accountRepo, videoRepo, followRepo)
+	profileHandler := profile.NewProfileHandler(profileService)
+	accountRouter.POST("/getProfile", profileHandler.GetProfile)
 
 	return router
 }

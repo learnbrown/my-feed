@@ -24,12 +24,16 @@ func (repo *MessageRepo) SendMessage(fromID, toID uint, content string) (*Messag
 	return message, err
 }
 
+// TODO: 升级复合游标
 func (repo *MessageRepo) ListConversation(fromID, toID uint, limit int, latestTime time.Time) (*[]Message, error) {
 	// fromID: current ID toID: with account ID
 	messages := &[]Message{}
 	query := repo.db.Model(&Message{}).
-		Where("from_id = ? AND to_id = ?", fromID, toID). // 当前用户发给对方的消息
-		Or("to_id = ? AND from_id = ?", fromID, toID)     // 对方发给当前账户的消息
+		Where(
+			"(from_id = ? AND to_id = ?) OR (to_id = ? AND from_id = ?)",
+			fromID, toID, // 当前用户发给对方的消息
+			fromID, toID, // 对方发给当前用户的消息
+		)
 
 	if !latestTime.IsZero() {
 		query = query.Where("created_at < ?", latestTime)

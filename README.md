@@ -126,5 +126,15 @@ like model只包含id和created_at字段
 
 #### 升级复合游标
 
-是不是所有的分页都要升级成复合游标
+TODO 是不是所有的分页都要升级成复合游标 -> 是
 
+#### 修改响应格式
+
+TODO 定义新的响应结构体，隐藏updated_at, deleted_at 等无关字段
+
+#### DTO
+
+DTO 是 Data Transfer Object，数据传输对象。
+在你的项目里可以简单理解成：
+数据库 Model：服务于数据库读写
+DTO：服务于接口入参/出参

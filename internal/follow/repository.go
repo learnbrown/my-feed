@@ -75,3 +75,21 @@ func (repo *FollowRepo) ListFollowing(followerID uint, limit int, latestTime tim
 		Scan(followingList).Error
 	return followingList, err
 }
+
+// 查看某用户的粉丝数
+func (repo *FollowRepo) GetFollowersCount(accountID uint) (int64, error) {
+	var cnt int64
+	err := repo.db.Model(&Follow{}).
+		Where("vlogger_id = ?", accountID).
+		Count(&cnt).Error
+	return cnt, err
+}
+
+// 查询某用户的关注数
+func (repo *FollowRepo) GetFollowingsCount(accountID uint) (int64, error) {
+	var cnt int64
+	err := repo.db.Model(&Follow{}).
+		Where("follower_id = ?", accountID).
+		Count(&cnt).Error
+	return cnt, err
+}

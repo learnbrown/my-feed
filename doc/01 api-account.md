@@ -169,3 +169,57 @@ Status: `200 OK`
 | --- | --- |
 | `401` | Token 缺失、格式错误、过期或已登出 |
 | `500` | 服务端内部错误 |
+
+### 用户个人主页
+
+查看某用户个人主页
+
+| 项目 | 内容 |
+| --- | --- |
+| URL | `/account/getProfile` |
+| Method | `POST` |
+| Auth | 不需要 |
+| Content-Type | 无 |
+
+#### 请求参数
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `account_id` | number | 是 | 用户id |
+
+#### 请求示例
+
+```json
+{
+  "account_id": 1
+}
+```
+
+#### 成功响应
+
+Status: `200 OK`
+
+```json
+{
+  "account": {
+    "id": 1,
+    "username": "user",
+    "avatar_url": "",
+    "bio": ""
+  },
+  "stats": {
+    "videos_count": 20,
+    "likes_count": 2,
+    "followers_count": 1,
+    "followings_count": 0
+  }
+}
+```
+
+#### 可能错误
+
+| 状态码 | 场景 |
+| --- | --- |
+| `400` | 参数错误
+| `404` | 用户不存在 |
+| `500` | 服务端内部错误 |

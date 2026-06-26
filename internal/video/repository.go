@@ -162,6 +162,7 @@ func (repo *VideoRepo) DecreaseLikesCount(id uint) error {
 	return nil
 }
 
+// 查询视频获赞数
 func (repo *VideoRepo) GetLikesCount(id uint) (uint, error) {
 	video := &Video{}
 	err := repo.db.First(video, id).Error
@@ -209,4 +210,23 @@ func (repo *VideoRepo) GetCommentsCount(id uint) (uint, error) {
 	err := repo.db.First(video, id).Error
 
 	return video.CommentsCount, err
+}
+
+// 查询某用户上传视频数
+func (repo *VideoRepo) GetVideosCount(accountID uint) (int64, error) {
+	var cnt int64
+	err := repo.db.Model(&Video{}).
+		Where("author_id = ? AND status = ?", accountID, 1).
+		Count(&cnt).Error
+	return cnt, err
+}
+
+// 查询某用户视频获赞数
+func (repo *VideoRepo) GetAuthorLikesCount(accountID uint) (int64, error) {
+	var cnt int64
+	err := repo.db.Model(&Video{}).
+		Where("author_id = ? AND status = ?", accountID, 1).
+		Select("COALESCE(SUM(likes_count), 0)").
+		Scan(&cnt).Error
+	return cnt, err
 }
