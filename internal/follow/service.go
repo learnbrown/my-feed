@@ -106,7 +106,7 @@ func (service *FollowService) Unfollow(followerID, vloggerID uint) error {
 
 // listFollower/listFollowing 返回类型
 type ListFollowResponse struct {
-	Follows  *[]FollowListDTO `json:"follows"` // 博主/粉丝列表
+	Follows  []FollowListDTO `json:"follows"` // 博主/粉丝列表
 	HasMore  bool             `json:"has_more"`
 	NextTime int64            `json:"next_time"`
 }
@@ -158,7 +158,7 @@ func (service *FollowService) ListFollower(vloggerID uint, limit int, latestTime
 	}
 
 	return &ListFollowResponse{
-		Follows:  &dtos,
+		Follows:  dtos,
 		HasMore:  hasMore,
 		NextTime: nextTime,
 	}, nil
@@ -211,7 +211,7 @@ func (service *FollowService) ListFollowing(followerID uint, limit int, latestTi
 	}
 
 	return &ListFollowResponse{
-		Follows:  &dtos,
+		Follows:  dtos,
 		HasMore:  hasMore,
 		NextTime: nextTime,
 	}, nil

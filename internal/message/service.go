@@ -65,6 +65,9 @@ func (service *MessageService) SendMessage(fromID, toID uint, content string) (*
 	}
 
 	msg, err := service.msgRepo.SendMessage(fromID, toID, content)
+	if err != nil {
+		return nil, err
+	}
 
 	dto := &MessageDTO{
 		ID:        msg.ID,
@@ -74,7 +77,7 @@ func (service *MessageService) SendMessage(fromID, toID uint, content string) (*
 		CreatedAt: msg.CreatedAt.UnixMilli(),
 	}
 
-	return dto, err
+	return dto, nil
 }
 
 // listConversation 响应格式

@@ -43,20 +43,7 @@ func (service *FeedService) ListLatest(limit int, latestTime time.Time) (*video.
 		nextTime = (*videos)[len(*videos)-1].CreatedAt.UnixMilli()
 	}
 
-	dtos := make([]video.VideoDTO, len(*videos))
-	for i, v := range *videos {
-		dtos[i] = video.VideoDTO{
-			ID:            v.ID,
-			AuthorID:      v.AuthorID,
-			Title:         v.Title,
-			Description:   v.Description,
-			PlayURL:       v.PlayURL,
-			CoverURL:      v.CoverURL,
-			LikesCount:    v.LikesCount,
-			CommentsCount: v.CommentsCount,
-			CreatedAt:     v.CreatedAt.UnixMilli(),
-		}
-	}
+	dtos := video.ToDTOs(*videos)
 
 	res := &video.ListResponse{
 		Videos:   dtos,
@@ -106,20 +93,7 @@ func (service *FeedService) ListByTag(tagName string, limit int, latest time.Tim
 		nextTime = (*videos)[len(*videos)-1].CreatedAt.UnixMilli()
 	}
 
-	dtos := make([]video.VideoDTO, len(*videos))
-	for i, v := range *videos {
-		dtos[i] = video.VideoDTO{
-			ID:            v.ID,
-			AuthorID:      v.AuthorID,
-			Title:         v.Title,
-			Description:   v.Description,
-			PlayURL:       v.PlayURL,
-			CoverURL:      v.CoverURL,
-			LikesCount:    v.LikesCount,
-			CommentsCount: v.CommentsCount,
-			CreatedAt:     v.CreatedAt.UnixMilli(),
-		}
-	}
+	dtos := video.ToDTOs(*videos)
 
 	res := &video.ListResponse{
 		Videos:   dtos,

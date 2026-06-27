@@ -62,6 +62,39 @@ type VideoDTO struct {
 	CreatedAt     int64  `json:"created_at"`
 }
 
+func ToDTO(video *Video) *VideoDTO {
+	return &VideoDTO{
+		ID:            video.ID,
+		AuthorID:      video.AuthorID,
+		Title:         video.Title,
+		Description:   video.Description,
+		PlayURL:       video.PlayURL,
+		CoverURL:      video.CoverURL,
+		LikesCount:    video.LikesCount,
+		CommentsCount: video.CommentsCount,
+		CreatedAt:     video.CreatedAt.UnixMilli(),
+	}
+}
+
+// 将Video列表转换为VideoDTO列表
+func ToDTOs(videos []Video) []VideoDTO {
+	dtos := make([]VideoDTO, len(videos))
+	for i, v := range videos {
+		dtos[i] = VideoDTO{
+			ID:            v.ID,
+			AuthorID:      v.AuthorID,
+			Title:         v.Title,
+			Description:   v.Description,
+			PlayURL:       v.PlayURL,
+			CoverURL:      v.CoverURL,
+			LikesCount:    v.LikesCount,
+			CommentsCount: v.CommentsCount,
+			CreatedAt:     v.CreatedAt.UnixMilli(),
+		}
+	}
+	return dtos
+}
+
 func (service *VideoService) Publish(authorID uint, title, description, video_url, cover_url string) (*VideoDTO, error) {
 	// [x] 缺少业务校验
 	if authorID == 0 {
@@ -141,39 +174,22 @@ func (service *VideoService) Publish(authorID uint, title, description, video_ur
 		return nil, err
 	}
 
-	dto := &VideoDTO{
-		ID:            video.ID,
-		AuthorID:      video.AuthorID,
-		Title:         video.Title,
-		Description:   video.Description,
-		PlayURL:       video.PlayURL,
-		CoverURL:      video.CoverURL,
-		LikesCount:    video.LikesCount,
-		CommentsCount: video.CommentsCount,
-		CreatedAt:     video.CreatedAt.UnixMilli(),
-	}
+	dto := ToDTO(video)
 
-	return dto, err
+	return dto, nil
 }
 
 func (service *VideoService) GetDetail(id uint) (*VideoDTO, error) {
 	video, err := service.repo.FindVideoByID(id)
-	if errors.Is(err, db.ErrRecordNotFound) {
-		return nil, ErrVideoNotFound
+	if err != nil {
+		if errors.Is(err, db.ErrRecordNotFound) {
+			return nil, ErrVideoNotFound
+		}
+		return nil, err
 	}
 
-	dto := &VideoDTO{
-		ID:            video.ID,
-		AuthorID:      video.AuthorID,
-		Title:         video.Title,
-		Description:   video.Description,
-		PlayURL:       video.PlayURL,
-		CoverURL:      video.CoverURL,
-		LikesCount:    video.LikesCount,
-		CommentsCount: video.CommentsCount,
-		CreatedAt:     video.CreatedAt.UnixMilli(),
-	}
-	return dto, err
+	dto := ToDTO(video)
+	return dto, nil
 }
 
 // 向handler返回list的结构
@@ -213,20 +229,7 @@ func (service *VideoService) ListByAuthorID(authorID uint, limit int, latestTime
 		nextTime = (*videos)[len(*videos)-1].CreatedAt.UnixMilli()
 	}
 
-	dtos := make([]VideoDTO, len(*videos))
-	for i, v := range *videos {
-		dtos[i] = VideoDTO{
-			ID:            v.ID,
-			AuthorID:      v.AuthorID,
-			Title:         v.Title,
-			Description:   v.Description,
-			PlayURL:       v.PlayURL,
-			CoverURL:      v.CoverURL,
-			LikesCount:    v.LikesCount,
-			CommentsCount: v.CommentsCount,
-			CreatedAt:     v.CreatedAt.UnixMilli(),
-		}
-	}
+	dtos := ToDTOs(*videos)
 
 	res := &ListResponse{
 		Videos:   dtos,

@@ -88,6 +88,10 @@ func (service *CommentService) CreateComment(accountID, videoID uint, content st
 		return nil
 	})
 
+	if err != nil {
+		return nil, 0, err
+	}
+
 	dto := &CommentDTO{
 		ID:        comment.ID,
 		VideoID:   comment.VideoID,
@@ -96,7 +100,7 @@ func (service *CommentService) CreateComment(accountID, videoID uint, content st
 		CreatedAt: comment.CreatedAt.UnixMilli(),
 	}
 
-	return dto, commentsCount, err
+	return dto, commentsCount, nil
 }
 
 func (service *CommentService) DeleteComment(accountID, commentID uint) (uint, error) {
@@ -153,9 +157,9 @@ func (service *CommentService) DeleteComment(accountID, commentID uint) (uint, e
 
 // listComment返回类型
 type ListCommentResponse struct {
-	Comments []CommentDTO
-	HasMore  bool
-	NextTime int64
+	Comments []CommentDTO `json:"comments"`
+	HasMore  bool         `json:"has_more"`
+	NextTime int64        `json:"next_time"`
 }
 
 func (service *CommentService) ListComment(videoID uint, limit int, latestTime time.Time) (*ListCommentResponse, error) {

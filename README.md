@@ -126,11 +126,17 @@ like model只包含id和created_at字段
 
 #### 升级复合游标
 
-TODO 是不是所有的分页都要升级成复合游标 -> 是
+是不是所有的分页都要升级成复合游标 -> 是
 
-#### 修改响应格式
-
-TODO 定义新的响应结构体，隐藏updated_at, deleted_at 等无关字段
+与List相关接口
+- listByAuthorID
+- listLatest
+- listByTag
+- listLikedVideos
+- listComment
+- listFollower
+- listFollowing
+- listConversation
 
 #### DTO
 

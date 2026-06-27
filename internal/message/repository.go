@@ -30,9 +30,9 @@ func (repo *MessageRepo) ListConversation(fromID, toID uint, limit int, latestTi
 	messages := &[]Message{}
 	query := repo.db.Model(&Message{}).
 		Where(
-			"(from_id = ? AND to_id = ?) OR (to_id = ? AND from_id = ?)",
+			"(from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?)",
 			fromID, toID, // 当前用户发给对方的消息
-			fromID, toID, // 对方发给当前用户的消息
+			toID, fromID, // 对方发给当前用户的消息
 		)
 
 	if !latestTime.IsZero() {

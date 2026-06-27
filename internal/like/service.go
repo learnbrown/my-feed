@@ -157,10 +157,29 @@ type LikedListDTO struct {
 	LikedAt       int64  `json:"liked_at"`
 }
 
+func ToDTOs(likedList []LikedList) []LikedListDTO {
+	dtos := make([]LikedListDTO, len(likedList))
+	for i, v := range likedList {
+		dtos[i] = LikedListDTO{
+			ID:            v.ID,
+			AuthorID:      v.AuthorID,
+			Title:         v.Title,
+			Description:   v.Description,
+			PlayURL:       v.PlayURL,
+			CoverURL:      v.CoverURL,
+			LikesCount:    v.LikesCount,
+			CommentsCount: v.CommentsCount,
+			CreatedAt:     v.CreatedAt.UnixMilli(),
+			LikedAt:       v.LikedAt.UnixMilli(),
+		}
+	}
+	return dtos
+}
+
 type ListLikedResponse struct {
 	HasMore  bool            `json:"has_more"`
 	NextTime int64           `json:"next_time"`
-	Likes    *[]LikedListDTO `json:"likes"`
+	Likes    []LikedListDTO `json:"likes"`
 }
 
 func (service *LikeService) ListLikedVideos(accountID uint, limit int, latestTime time.Time) (*ListLikedResponse, error) {
@@ -189,24 +208,10 @@ func (service *LikeService) ListLikedVideos(accountID uint, limit int, latestTim
 		nextTime = (*likedList)[len(*likedList)-1].LikedAt.UnixMilli()
 	}
 
-	dtos := make([]LikedListDTO, len(*likedList))
-	for i, v := range *likedList {
-		dtos[i] = LikedListDTO{
-			ID:            v.ID,
-			AuthorID:      v.AuthorID,
-			Title:         v.Title,
-			Description:   v.Description,
-			PlayURL:       v.PlayURL,
-			CoverURL:      v.CoverURL,
-			LikesCount:    v.LikesCount,
-			CommentsCount: v.CommentsCount,
-			CreatedAt:     v.CreatedAt.UnixMilli(),
-			LikedAt:       v.LikedAt.UnixMilli(),
-		}
-	}
+	dtos := ToDTOs(*likedList)
 
 	res := &ListLikedResponse{
-		Likes:    &dtos,
+		Likes:    dtos,
 		NextTime: nextTime,
 		HasMore:  hasMore,
 	}
