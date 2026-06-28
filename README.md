@@ -129,14 +129,14 @@ like model只包含id和created_at字段
 是不是所有的分页都要升级成复合游标 -> 是
 
 与List相关接口
-- listByAuthorID
-- listLatest
-- listByTag
-- listLikedVideos
-- listComment
-- listFollower
-- listFollowing
-- listConversation
+- [x] listByAuthorID
+- [x] listLatest
+- [x] listByTag
+- [x] listLikedVideos
+- [x] listComment
+- [x] listFollower
+- [x] listFollowing
+- [x] listConversation
 
 #### DTO
 
@@ -146,3 +146,11 @@ DTO 是 Data Transfer Object，数据传输对象。
 DTO：服务于接口入参/出参
 
 已将所有直接向前端返回model的，改为返回DTO，去除不需要字段，并将时间转化为毫秒时间戳
+
+#### 时间精度损失
+
+接收前端请求和返回响应时，都是使用毫秒时间戳，并将其转为UnixMilli
+
+而数据库保存的`created_at`精度含有微秒/纳秒，会导致有些数据被漏掉
+
+TODO: 单独抽一个 internal/cursor 包，把所有 list 接口统一升级成 cursor/next_cursor

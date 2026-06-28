@@ -62,19 +62,22 @@ func (repo *LikeRepo) DeleteLike(accountID, videoID uint) (deleted bool, err err
 // 返回点赞过的视频列表
 // [x] 应该按 likes.created_at desc 排序
 // [x] 返回值中不包含likes.created_at，无法获得next_time -> 定义新结构来保存点赞时间
-func (repo *LikeRepo) ListLikedVideos(accountID uint, limit int, latestTime time.Time) (*[]LikedList, error) {
+func (repo *LikeRepo) ListLikedVideos(accountID uint, limit int, latestTime time.Time, latestID uint) (*[]LikedList, error) {
 	likedList := &[]LikedList{}
 
 	videoQuery := repo.db.Model(&video.Video{}).
-		Select("videos.*, likes.created_at AS liked_at").
+		Select("videos.*, likes.created_at AS liked_at, likes.id AS like_id").
 		Joins("JOIN likes ON videos.id = likes.video_id").
 		Where("likes.account_id = ? AND videos.status = 1", accountID)
 
-	if !latestTime.IsZero() {
-		videoQuery = videoQuery.Where("likes.created_at < ?", latestTime)
+	if !latestTime.IsZero() && latestID > 0 {
+		videoQuery = videoQuery.Where(
+			"(likes.created_at < ? OR (likes.created_at = ? AND likes.id < ?))",
+			latestTime, latestTime, latestID,
+		)
 	}
 
-	err := videoQuery.Order("likes.created_at DESC").
+	err := videoQuery.Order("likes.created_at DESC, likes.id DESC").
 		Limit(limit).
 		Scan(likedList).Error
 

@@ -108,12 +108,13 @@ func (handler *VideoHandler) GetDetail(c *gin.Context) {
 // Get video list of author
 // [x] LatestTime是做什么的
 // 游标分页，见README
-// TODO 升级为 created_at + id 复合游标
+// [x] 升级为 created_at + id 复合游标
 
 type ListRequest struct {
 	AuthorID   uint  `json:"author_id" binding:"required"`
 	Limit      int   `json:"limit"`
 	LatestTime int64 `json:"latest_time"`
+	LatestID   uint  `json:"latest_id"`
 }
 
 func (handler *VideoHandler) ListByAuthorID(c *gin.Context) {
@@ -126,20 +127,26 @@ func (handler *VideoHandler) ListByAuthorID(c *gin.Context) {
 		return
 	}
 
+	if input.LatestTime < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": ErrInvalidCursor.Error(),
+		})
+	}
+
 	var latestTime time.Time
 	if input.LatestTime > 0 {
 		latestTime = time.UnixMilli(input.LatestTime)
 	}
 
-	res, err := handler.service.ListByAuthorID(input.AuthorID, input.Limit, latestTime)
+	res, err := handler.service.ListByAuthorID(input.AuthorID, input.Limit, latestTime, input.LatestID)
 	if err != nil {
 		switch {
-		case errors.Is(err, ErrAuthorRequired):
+		case errors.Is(err, ErrAuthorRequired) ||
+			errors.Is(err, ErrInvalidCursor):
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": err.Error(),
 			})
 		default:
-
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": err.Error(),
 			})
@@ -149,11 +156,7 @@ func (handler *VideoHandler) ListByAuthorID(c *gin.Context) {
 	}
 
 	// [x] 为什么列表为空
-	c.JSON(http.StatusOK, gin.H{
-		"videos":    res.Videos,
-		"next_time": res.NextTime,
-		"has_more":  res.HasMore,
-	})
+	c.JSON(http.StatusOK, res)
 }
 
 // Upload video

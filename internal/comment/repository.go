@@ -58,16 +58,19 @@ func (repo *CommentRepo) FindCommentByID(commentID uint) (*Comment, error) {
 	return comment, err
 }
 
-func (repo *CommentRepo) ListComment(videoID uint, limit int, latestTime time.Time) (*[]Comment, error) {
+func (repo *CommentRepo) ListComment(videoID uint, limit int, latestTime time.Time, latestID uint) (*[]Comment, error) {
 	comments := &[]Comment{}
 	query := repo.db.Model(&Comment{}).
 		Where("video_id = ?", videoID)
 
-	if !latestTime.IsZero() {
-		query = query.Where("created_at < ?", latestTime)
+	if !latestTime.IsZero() && latestID > 0 {
+		query = query.Where(
+			"(created_at < ? OR (created_at = ? AND id < ?))",
+			latestTime, latestTime, latestID,
+		)
 	}
 
-	err := query.Order("created_at DESC").
+	err := query.Order("created_at DESC, id DESC").
 		Limit(limit).
 		Find(comments).Error
 

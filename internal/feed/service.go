@@ -17,10 +17,11 @@ func NewFeedService(repo *video.VideoRepo) *FeedService {
 
 var (
 	ErrTagNameRequired = errors.New("tag name required")
+	ErrInvalidCursor   = errors.New("invalid cursor")
 )
 
-// TODO: 升级为created_at + id 复合游标
-func (service *FeedService) ListLatest(limit int, latestTime time.Time) (*video.ListResponse, error) {
+// [x]: 升级为created_at + id 复合游标
+func (service *FeedService) ListLatest(limit int, latestTime time.Time, latestID uint) (*video.ListResponse, error) {
 	if limit > 50 {
 		limit = 50
 	}
@@ -28,7 +29,11 @@ func (service *FeedService) ListLatest(limit int, latestTime time.Time) (*video.
 		limit = 20
 	}
 
-	videos, err := service.repo.ListLatest(limit+1, latestTime)
+	if latestTime.IsZero() != (latestID == 0) {
+		return nil, ErrInvalidCursor
+	}
+
+	videos, err := service.repo.ListLatest(limit+1, latestTime, latestID)
 	if err != nil {
 		return nil, err
 	}
@@ -39,8 +44,10 @@ func (service *FeedService) ListLatest(limit int, latestTime time.Time) (*video.
 	}
 
 	var nextTime int64
+	var nextID uint
 	if len(*videos) > 0 {
 		nextTime = (*videos)[len(*videos)-1].CreatedAt.UnixMilli()
+		nextID = (*videos)[len(*videos)-1].ID
 	}
 
 	dtos := video.ToDTOs(*videos)
@@ -48,10 +55,11 @@ func (service *FeedService) ListLatest(limit int, latestTime time.Time) (*video.
 	res := &video.ListResponse{
 		Videos:   dtos,
 		NextTime: nextTime,
+		NextID:   nextID,
 		HasMore:  hasMore,
 	}
 
-	return res, err
+	return res, nil
 }
 
 // 实现 /feed/listByTag：
@@ -60,8 +68,8 @@ func (service *FeedService) ListLatest(limit int, latestTime time.Time) (*video.
 // 排序和分页逻辑复用 listLatest 的思路。
 // 查不到 tag 时返回空列表，不要返回 500。
 
-// TODO: 升级为created_at + id 复合游标
-func (service *FeedService) ListByTag(tagName string, limit int, latest time.Time) (*video.ListResponse, error) {
+// [x]: 升级为created_at + id 复合游标
+func (service *FeedService) ListByTag(tagName string, limit int, latestTime time.Time, latestID uint) (*video.ListResponse, error) {
 	tagName = strings.TrimSpace(tagName)
 	// 兼容输入 `#GO`
 	tagName = strings.TrimPrefix(tagName, "#")
@@ -77,8 +85,12 @@ func (service *FeedService) ListByTag(tagName string, limit int, latest time.Tim
 		limit = 20
 	}
 
+	if latestTime.IsZero() != (latestID == 0) {
+		return nil, ErrInvalidCursor
+	}
+
 	// 调用repo ListByTag
-	videos, err := service.repo.ListByTag(tagName, limit+1, latest)
+	videos, err := service.repo.ListByTag(tagName, limit+1, latestTime, latestID)
 	if err != nil {
 		return nil, err
 	}
@@ -89,8 +101,10 @@ func (service *FeedService) ListByTag(tagName string, limit int, latest time.Tim
 	}
 
 	var nextTime int64
+	var nextID uint
 	if len(*videos) > 0 {
 		nextTime = (*videos)[len(*videos)-1].CreatedAt.UnixMilli()
+		nextID = (*videos)[len(*videos)-1].ID
 	}
 
 	dtos := video.ToDTOs(*videos)
@@ -98,6 +112,7 @@ func (service *FeedService) ListByTag(tagName string, limit int, latest time.Tim
 	res := &video.ListResponse{
 		Videos:   dtos,
 		NextTime: nextTime,
+		NextID:   nextID,
 		HasMore:  hasMore,
 	}
 

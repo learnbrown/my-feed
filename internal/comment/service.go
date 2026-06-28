@@ -17,6 +17,7 @@ var (
 	ErrCommentNotFound = errors.New("comment not found")
 	ErrVideoNotFound   = errors.New("video not found")
 	ErrCommentRequired = errors.New("comment required")
+	ErrInvalidCursor   = errors.New("invalid cursor")
 )
 
 type CommentService struct {
@@ -160,9 +161,10 @@ type ListCommentResponse struct {
 	Comments []CommentDTO `json:"comments"`
 	HasMore  bool         `json:"has_more"`
 	NextTime int64        `json:"next_time"`
+	NextID   uint         `json:"next_id"`
 }
 
-func (service *CommentService) ListComment(videoID uint, limit int, latestTime time.Time) (*ListCommentResponse, error) {
+func (service *CommentService) ListComment(videoID uint, limit int, latestTime time.Time, latestID uint) (*ListCommentResponse, error) {
 	// TODO: 验证videoID有效性，先不管，没有该视频就返回空列表
 
 	if videoID == 0 {
@@ -175,7 +177,11 @@ func (service *CommentService) ListComment(videoID uint, limit int, latestTime t
 		limit = 20
 	}
 
-	comments, err := service.repo.ListComment(videoID, limit+1, latestTime)
+	if latestTime.IsZero() != (latestID == 0) {
+		return nil, ErrInvalidCursor
+	}
+
+	comments, err := service.repo.ListComment(videoID, limit+1, latestTime, latestID)
 	if err != nil {
 		return nil, err
 	}
@@ -186,8 +192,10 @@ func (service *CommentService) ListComment(videoID uint, limit int, latestTime t
 	}
 
 	var nextTime int64
+	var nextID uint
 	if len(*comments) > 0 {
 		nextTime = (*comments)[len(*comments)-1].CreatedAt.UnixMilli()
+		nextID = (*comments)[len(*comments)-1].ID
 	}
 
 	dtos := make([]CommentDTO, len(*comments))
@@ -205,5 +213,6 @@ func (service *CommentService) ListComment(videoID uint, limit int, latestTime t
 		Comments: dtos,
 		HasMore:  hasMore,
 		NextTime: nextTime,
-	}, err
+		NextID:   nextID,
+	}, nil
 }

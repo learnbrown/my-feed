@@ -17,13 +17,15 @@
 | --- | --- | --- | --- |
 | `limit` | number | 否 | 返回数量，默认 `20`，最大 `50` |
 | `latest_time` | number | 否 | 分页游标，毫秒时间戳，第一页传 `0` |
+| `latest_id` | number | 否 | 分页游标，第一页传`0` |
 
 #### 请求示例
 
 ```json
 {
-  "limit": 20,
-  "latest_time": 0
+  "limit": 5,
+  "latest_time": 0,
+  "latest_id": 0
 }
 ```
 
@@ -76,6 +78,7 @@ Status: `200 OK`
 | `tag_name` | string | 是 | 标签名，例如 `go` 或 `#go` |
 | `limit` | number | 否 | 返回数量，默认 `20`，最大 `50` |
 | `latest_time` | number | 否 | 分页游标，毫秒时间戳，第一页传 `0` |
+| `latest_id` | number | 否 | 分页游标，第一页传`0` |
 
 #### 请求示例
 
@@ -83,7 +86,8 @@ Status: `200 OK`
 {
   "tag_name": "go",
   "limit": 10,
-  "latest_time": 0
+  "latest_time": 0,
+  "latest_id": 0
 }
 ```
 
@@ -95,6 +99,7 @@ Status: `200 OK`
 {
   "has_more": false,
   "next_time": 1782482684898,
+  "next_id": 9,
   "videos": [
     {
       "id": 32,

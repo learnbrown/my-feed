@@ -16,6 +16,7 @@ var (
 	ErrContentRequired  = errors.New("content required")
 	ErrContentTooLarge  = errors.New("content too large")
 	ErrAccountNotFound  = errors.New("account not found")
+	ErrInvalidCursor    = errors.New("invalid cursor")
 )
 
 type MessageService struct {
@@ -85,9 +86,10 @@ type ListCvsResponse struct {
 	Messages []MessageDTO `json:"messages"`
 	HasMore  bool         `json:"has_more"`
 	NextTime int64        `json:"next_time"`
+	NextID   uint         `json:"next_id"`
 }
 
-func (service *MessageService) ListConversation(fromID, toID uint, limit int, latestTime time.Time) (*ListCvsResponse, error) {
+func (service *MessageService) ListConversation(fromID, toID uint, limit int, latestTime time.Time, latestID uint) (*ListCvsResponse, error) {
 	if fromID == 0 {
 		return nil, ErrSenderRequired
 	}
@@ -114,7 +116,11 @@ func (service *MessageService) ListConversation(fromID, toID uint, limit int, la
 		limit = 20
 	}
 
-	messages, err := service.msgRepo.ListConversation(fromID, toID, limit+1, latestTime)
+	if latestTime.IsZero() != (latestID == 0) {
+		return nil, ErrInvalidCursor
+	}
+
+	messages, err := service.msgRepo.ListConversation(fromID, toID, limit+1, latestTime, latestID)
 	if err != nil {
 		return nil, err
 	}
@@ -125,8 +131,10 @@ func (service *MessageService) ListConversation(fromID, toID uint, limit int, la
 	}
 
 	var nextTime int64
+	var nextID uint
 	if len(*messages) > 0 {
 		nextTime = (*messages)[len(*messages)-1].CreatedAt.UnixMilli()
+		nextID = (*messages)[len(*messages)-1].ID
 	}
 
 	dtos := make([]MessageDTO, len(*messages))
@@ -144,5 +152,6 @@ func (service *MessageService) ListConversation(fromID, toID uint, limit int, la
 		Messages: dtos,
 		HasMore:  hasMore,
 		NextTime: nextTime,
+		NextID:   nextID,
 	}, nil
 }

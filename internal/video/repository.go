@@ -28,30 +28,40 @@ func (repo *VideoRepo) FindVideoByID(id uint) (*Video, error) {
 }
 
 // 分页查询，latest_time为游标，查询早于它创建的视频
-func (repo *VideoRepo) ListByAuthorID(authorID uint, limit int, latestTime time.Time) (*[]Video, error) {
+func (repo *VideoRepo) ListByAuthorID(authorID uint, limit int, latestTime time.Time, latestID uint) (*[]Video, error) {
 	videos := &[]Video{}
 
-	query := repo.db.Model(&Video{}).Where("author_id = ? AND status = ?", authorID, 1)
+	query := repo.db.Model(&Video{}).
+		Where("author_id = ? AND status = ?", authorID, 1)
 
-	if !latestTime.IsZero() {
-		query = query.Where("created_at < ?", latestTime)
+	if !latestTime.IsZero() && latestID > 0 {
+		query = query.Where(
+			"(created_at < ? OR (created_at = ? AND id < ?))",
+			latestTime, latestTime, latestID,
+		)
 	}
 
-	err := query.Order("created_at desc").Limit(limit).Find(videos).Error
+	err := query.Order("created_at DESC, id DESC").
+		Limit(limit).
+		Find(videos).Error
 	return videos, err
 }
 
-// TODO: ListLatest 首页最新视频流 升级为created_at, id 复合游标
-func (repo *VideoRepo) ListLatest(limit int, latestTime time.Time) (*[]Video, error) {
+// [x]: ListLatest 首页最新视频流 升级为created_at, id 复合游标
+func (repo *VideoRepo) ListLatest(limit int, latestTime time.Time, latestID uint) (*[]Video, error) {
 	videos := &[]Video{}
 
-	query := repo.db.Model(&Video{}).Where("status = ?", 1)
+	query := repo.db.Model(&Video{}).
+		Where("status = ?", 1)
 
-	if !latestTime.IsZero() {
-		query = query.Where("created_at < ?", latestTime)
+	if !latestTime.IsZero() && latestID > 0 {
+		query = query.Where(
+			"(created_at < ? OR (created_at = ? AND id < ?))",
+			latestTime, latestTime, latestID,
+		)
 	}
 
-	err := query.Order("created_at desc").
+	err := query.Order("created_at DESC, id DESC").
 		Limit(limit).
 		Find(videos).Error
 
@@ -104,7 +114,7 @@ func (repo *VideoRepo) Transaction(fn func(txRepo *VideoRepo) error) error {
 	})
 }
 
-func (repo *VideoRepo) ListByTag(tagName string, limit int, latestTime time.Time) (*[]Video, error) {
+func (repo *VideoRepo) ListByTag(tagName string, limit int, latestTime time.Time, latestID uint) (*[]Video, error) {
 	videos := &[]Video{}
 
 	tagQuery := repo.db.Model(&Tag{}).Select("id").Where("name = ?", tagName)
@@ -115,11 +125,14 @@ func (repo *VideoRepo) ListByTag(tagName string, limit int, latestTime time.Time
 		Where("id IN (?)", videoTagQuery).
 		Where("status = ?", 1)
 
-	if !latestTime.IsZero() {
-		videoQuery = videoQuery.Where("created_at < ?", latestTime)
+	if !latestTime.IsZero() && latestID > 0 {
+		videoQuery = videoQuery.Where(
+			"(created_at < ? OR (created_at = ? AND id < ?))",
+			latestTime, latestTime, latestID,
+		)
 	}
 
-	err := videoQuery.Order("created_at desc").
+	err := videoQuery.Order("created_at DESC, id DESC").
 		Limit(limit).
 		Find(videos).Error
 

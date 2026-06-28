@@ -218,6 +218,7 @@ Status: `200 OK`
 | `author_id` | number | 是 | 作者用户 ID |
 | `limit` | number | 否 | 返回数量，默认 `20`，最大 `50` |
 | `latest_time` | number | 否 | 分页游标，毫秒时间戳，第一页传 `0` |
+| `latest_id` | number | 否 | 分页游标，第一页传`0` |
 
 #### 请求示例
 
@@ -225,7 +226,8 @@ Status: `200 OK`
 {
   "author_id": 1,
   "limit": 10,
-  "latest_time": 0
+  "latest_time": 0,
+  "latest_id": 0
 }
 ```
 
@@ -237,6 +239,7 @@ Status: `200 OK`
 {
   "has_more": true,
   "next_time": 1782371434346,
+  "next_id": 8,
   "videos": [
     {
       "id": 31,

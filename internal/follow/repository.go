@@ -41,18 +41,21 @@ func (repo *FollowRepo) DeleteFollow(followerID, vloggerID uint) (bool, error) {
 }
 
 // 粉丝列表
-func (repo *FollowRepo) ListFollower(vloggerID uint, limit int, latestTime time.Time) (*[]FollowList, error) {
+func (repo *FollowRepo) ListFollower(vloggerID uint, limit int, latestTime time.Time, latestID uint) (*[]FollowList, error) {
 	followerList := &[]FollowList{}
 	query := repo.db.Model(&account.Account{}).
-		Select("accounts.*, follows.created_at AS followed_at").
+		Select("accounts.*, follows.created_at AS followed_at, follows.id AS follow_id").
 		Joins("JOIN follows ON accounts.id = follows.follower_id").
 		Where("follows.vlogger_id = ?", vloggerID)
 
-	if !latestTime.IsZero() {
-		query = query.Where("follows.created_at < ?", latestTime)
+	if !latestTime.IsZero() && latestID > 0 {
+		query = query.Where(
+			"(follows.created_at < ? OR (follows.created_at = ? AND follows.id < ?))",
+			latestTime, latestTime, latestID,
+		)
 	}
 
-	err := query.Order("follows.created_at DESC").
+	err := query.Order("follows.created_at DESC, follows.id DESC").
 		Limit(limit).
 		Scan(followerList).Error
 
@@ -60,17 +63,20 @@ func (repo *FollowRepo) ListFollower(vloggerID uint, limit int, latestTime time.
 }
 
 // 关注列表
-func (repo *FollowRepo) ListFollowing(followerID uint, limit int, latestTime time.Time) (*[]FollowList, error) {
+func (repo *FollowRepo) ListFollowing(followerID uint, limit int, latestTime time.Time, latestID uint) (*[]FollowList, error) {
 	followingList := &[]FollowList{}
 	query := repo.db.Model(&account.Account{}).
-		Select("accounts.*, follows.created_at AS followed_at").
+		Select("accounts.*, follows.created_at AS followed_at, follows.id AS follow_id").
 		Joins("JOIN follows ON accounts.id = follows.vlogger_id").
 		Where("follows.follower_id = ?", followerID)
 
-	if !latestTime.IsZero() {
-		query = query.Where("follows.created_at < ?", latestTime)
+	if !latestTime.IsZero() && latestID > 0 {
+		query = query.Where(
+			"(follows.created_at < ? OR (follows.created_at = ? AND follows.id < ?))",
+			latestTime, latestTime, latestID,
+		)
 	}
-	err := query.Order("follows.created_at DESC").
+	err := query.Order("follows.created_at DESC, follows.id DESC").
 		Limit(limit).
 		Scan(followingList).Error
 	return followingList, err

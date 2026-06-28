@@ -164,6 +164,7 @@ type ListFollowRequest struct {
 	AccountID  uint  `json:"account_id" binding:"required"`
 	Limit      int   `json:"limit"`
 	LatestTime int64 `json:"latest_time"`
+	LatestID   uint  `json:"latest_id"`
 }
 
 // 查看某用户的粉丝列表
@@ -177,15 +178,23 @@ func (handler *FollowHandler) ListFollower(c *gin.Context) {
 		return
 	}
 
+	if input.LatestTime < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": ErrInvalidCursor.Error(),
+		})
+		return
+	}
+
 	var latestTime time.Time
 	if input.LatestTime > 0 {
 		latestTime = time.UnixMilli(input.LatestTime)
 	}
 
-	res, err := handler.service.ListFollower(input.AccountID, input.Limit, latestTime)
+	res, err := handler.service.ListFollower(input.AccountID, input.Limit, latestTime, input.LatestID)
 	if err != nil {
 		switch {
-		case errors.Is(err, ErrVloggerRequired):
+		case errors.Is(err, ErrVloggerRequired) ||
+			errors.Is(err, ErrInvalidCursor):
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": err.Error(),
 			})
@@ -201,11 +210,7 @@ func (handler *FollowHandler) ListFollower(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"accounts":  res.Follows,
-		"has_more":  res.HasMore,
-		"next_time": res.NextTime,
-	})
+	c.JSON(http.StatusOK, res)
 }
 
 // 查看某用户的关注列表
@@ -219,15 +224,23 @@ func (handler *FollowHandler) ListFollowing(c *gin.Context) {
 		return
 	}
 
+	if input.LatestTime < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": ErrInvalidCursor.Error(),
+		})
+		return
+	}
+
 	var latestTime time.Time
 	if input.LatestTime > 0 {
 		latestTime = time.UnixMilli(input.LatestTime)
 	}
 
-	res, err := handler.service.ListFollowing(input.AccountID, input.Limit, latestTime)
+	res, err := handler.service.ListFollowing(input.AccountID, input.Limit, latestTime, input.LatestID)
 	if err != nil {
 		switch {
-		case errors.Is(err, ErrFollowerRequired):
+		case errors.Is(err, ErrFollowerRequired) ||
+			errors.Is(err, ErrInvalidCursor):
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": err.Error(),
 			})
@@ -243,9 +256,5 @@ func (handler *FollowHandler) ListFollowing(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"accounts":  res.Follows,
-		"has_more":  res.HasMore,
-		"next_time": res.NextTime,
-	})
+	c.JSON(http.StatusOK, res)
 }

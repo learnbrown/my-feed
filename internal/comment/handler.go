@@ -131,6 +131,7 @@ type ListCommentRequest struct {
 	VideoID    uint  `json:"video_id" binding:"required"`
 	Limit      int   `json:"limit"`
 	LatestTime int64 `json:"latest_time"`
+	LatestID   uint  `json:"latest_id"`
 }
 
 func (handler *CommentHandler) ListComment(c *gin.Context) {
@@ -143,15 +144,23 @@ func (handler *CommentHandler) ListComment(c *gin.Context) {
 		return
 	}
 
+	if input.LatestTime < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": ErrInvalidCursor.Error(),
+		})
+		return
+	}
+
 	var latestTime time.Time
 	if input.LatestTime > 0 {
 		latestTime = time.UnixMilli(input.LatestTime)
 	}
 
-	res, err := handler.service.ListComment(input.VideoID, input.Limit, latestTime)
+	res, err := handler.service.ListComment(input.VideoID, input.Limit, latestTime, input.LatestID)
 	if err != nil {
 		switch {
-		case errors.Is(err, ErrVideoRequired):
+		case errors.Is(err, ErrVideoRequired) ||
+			errors.Is(err, ErrInvalidCursor):
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -159,9 +168,5 @@ func (handler *CommentHandler) ListComment(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"comments":  res.Comments,
-		"has_more":  res.HasMore,
-		"next_time": res.NextTime,
-	})
+	c.JSON(http.StatusOK, res)
 }

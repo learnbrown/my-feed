@@ -45,6 +45,7 @@ var (
 	ErrFileRequired        = errors.New("file required")
 	ErrInvalidPlayURL      = errors.New("invalid play url")
 	ErrInvalidCoverURL     = errors.New("invalid cover url")
+	ErrInvalidCursor       = errors.New("invalid cursor")
 )
 
 var tagRegex = regexp.MustCompile(`#[\p{L}\p{N}_+]+`)
@@ -196,10 +197,11 @@ func (service *VideoService) GetDetail(id uint) (*VideoDTO, error) {
 type ListResponse struct {
 	Videos   []VideoDTO `json:"videos"`
 	NextTime int64      `json:"next_time"`
+	NextID   uint       `json:"next_id"`
 	HasMore  bool       `json:"has_more"`
 }
 
-func (service *VideoService) ListByAuthorID(authorID uint, limit int, latestTime time.Time) (*ListResponse, error) {
+func (service *VideoService) ListByAuthorID(authorID uint, limit int, latestTime time.Time, latestID uint) (*ListResponse, error) {
 	if authorID == 0 {
 		return nil, ErrAuthorRequired
 	}
@@ -211,7 +213,11 @@ func (service *VideoService) ListByAuthorID(authorID uint, limit int, latestTime
 		limit = 50
 	}
 
-	videos, err := service.repo.ListByAuthorID(authorID, limit+1, latestTime)
+	if latestTime.IsZero() != (latestID == 0) {
+		return nil, ErrInvalidCursor
+	}
+
+	videos, err := service.repo.ListByAuthorID(authorID, limit+1, latestTime, latestID)
 	if err != nil {
 		return nil, err
 	}
@@ -225,8 +231,10 @@ func (service *VideoService) ListByAuthorID(authorID uint, limit int, latestTime
 	}
 
 	var nextTime int64
+	var nextID uint
 	if len(*videos) > 0 {
 		nextTime = (*videos)[len(*videos)-1].CreatedAt.UnixMilli()
+		nextID = (*videos)[len(*videos)-1].ID
 	}
 
 	dtos := ToDTOs(*videos)
@@ -234,10 +242,11 @@ func (service *VideoService) ListByAuthorID(authorID uint, limit int, latestTime
 	res := &ListResponse{
 		Videos:   dtos,
 		NextTime: nextTime,
+		NextID:   nextID,
 		HasMore:  hasMore,
 	}
 
-	return res, err
+	return res, nil
 }
 
 func (service *VideoService) UploadVideo(authorID uint, file *multipart.FileHeader) (string, error) {

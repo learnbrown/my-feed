@@ -149,13 +149,15 @@ Status: `200 OK`
 | --- | --- | --- | --- |
 | `limit` | number | 否 | 返回数量，默认 `20`，最大 `50` |
 | `latest_time` | number | 否 | 分页游标，毫秒时间戳，第一页传 `0` |
+| `latest_id` | number | 否 | 分页游标，第一页传`0` |
 
 #### 请求示例
 
 ```json
 {
   "limit": 5,
-  "latest_time": 0
+  "latest_time": 0,
+  "latest_id": 0
 }
 ```
 
@@ -180,7 +182,8 @@ Status: `200 OK`
       "liked_at": 1782481722006
     }
   ],
-  "next_time": 1782371254336
+  "next_time": 1782371254336,
+  "next_id": 8
 }
 ```
 

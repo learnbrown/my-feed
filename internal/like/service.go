@@ -12,6 +12,7 @@ var (
 	ErrVideoRequired  = errors.New("video required")
 	ErrVideoNotFound  = errors.New("video not found")
 	ErrLikeNotFound   = errors.New("like not found")
+	ErrInvalidCursor  = errors.New("invalid cursor")
 )
 
 type LikeService struct {
@@ -141,6 +142,7 @@ func (service *LikeService) Unlike(accountID, videoID uint) (uint, error) {
 // LikeAt字段用于传递likes.created_at，以得到next_time
 type LikedList struct {
 	video.Video
+	LikeID  uint      `json:"like_id"`
 	LikedAt time.Time `json:"liked_at"`
 }
 
@@ -177,12 +179,13 @@ func ToDTOs(likedList []LikedList) []LikedListDTO {
 }
 
 type ListLikedResponse struct {
-	HasMore  bool            `json:"has_more"`
-	NextTime int64           `json:"next_time"`
+	HasMore  bool           `json:"has_more"`
+	NextTime int64          `json:"next_time"`
+	NextID   uint           `json:"next_id"`
 	Likes    []LikedListDTO `json:"likes"`
 }
 
-func (service *LikeService) ListLikedVideos(accountID uint, limit int, latestTime time.Time) (*ListLikedResponse, error) {
+func (service *LikeService) ListLikedVideos(accountID uint, limit int, latestTime time.Time, latestID uint) (*ListLikedResponse, error) {
 	if accountID == 0 {
 		return nil, ErrAuthorRequired
 	}
@@ -193,7 +196,11 @@ func (service *LikeService) ListLikedVideos(accountID uint, limit int, latestTim
 		limit = 20
 	}
 
-	likedList, err := service.repo.ListLikedVideos(accountID, limit+1, latestTime)
+	if latestTime.IsZero() != (latestID == 0) {
+		return nil, ErrInvalidCursor
+	}
+
+	likedList, err := service.repo.ListLikedVideos(accountID, limit+1, latestTime, latestID)
 	if err != nil {
 		return nil, err
 	}
@@ -204,8 +211,10 @@ func (service *LikeService) ListLikedVideos(accountID uint, limit int, latestTim
 	}
 
 	var nextTime int64
+	var nextID uint
 	if len(*likedList) > 0 {
 		nextTime = (*likedList)[len(*likedList)-1].LikedAt.UnixMilli()
+		nextID = (*likedList)[len(*likedList)-1].LikeID
 	}
 
 	dtos := ToDTOs(*likedList)
@@ -213,10 +222,11 @@ func (service *LikeService) ListLikedVideos(accountID uint, limit int, latestTim
 	res := &ListLikedResponse{
 		Likes:    dtos,
 		NextTime: nextTime,
+		NextID:   nextID,
 		HasMore:  hasMore,
 	}
 
-	return res, err
+	return res, nil
 }
 
 func (service *LikeService) IsLiked(accountID, videoID uint) (bool, error) {
