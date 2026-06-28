@@ -4,7 +4,7 @@ import (
 	"errors"
 	"my_feed/internal/account"
 	"my_feed/internal/auth"
-	"my_feed/internal/db"
+	"my_feed/internal/dberr"
 	"net/http"
 	"strings"
 
@@ -47,7 +47,7 @@ func JWTAuth(accountRepo *account.AccountRepo) gin.HandlerFunc {
 		acc, err := accountRepo.FindAccountByID(claims.AccountID)
 		if err != nil {
 			// find返回的错误有多种，需分开处理
-			if errors.Is(err, db.ErrRecordNotFound) {
+			if errors.Is(err, dberr.ErrRecordNotFound) {
 				c.JSON(http.StatusUnauthorized, gin.H{
 					"error": "user doesn't exist",
 				})

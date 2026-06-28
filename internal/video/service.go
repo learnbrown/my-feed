@@ -7,7 +7,7 @@ import (
 	"io"
 	"math/big"
 	"mime/multipart"
-	"my_feed/internal/db"
+	"my_feed/internal/dberr"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -183,7 +183,7 @@ func (service *VideoService) Publish(authorID uint, title, description, video_ur
 func (service *VideoService) GetDetail(id uint) (*VideoDTO, error) {
 	video, err := service.repo.FindVideoByID(id)
 	if err != nil {
-		if errors.Is(err, db.ErrRecordNotFound) {
+		if errors.Is(err, dberr.ErrRecordNotFound) {
 			return nil, ErrVideoNotFound
 		}
 		return nil, err

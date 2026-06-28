@@ -2,7 +2,7 @@ package video
 
 import (
 	"errors"
-	"my_feed/internal/db"
+	"my_feed/internal/dberr"
 	"time"
 
 	"gorm.io/gorm"
@@ -76,7 +76,7 @@ func (repo *VideoRepo) FindOrCreateTag(name string) (*Tag, error) {
 	if err == nil {
 		return tag, nil
 	}
-	if !errors.Is(err, db.ErrRecordNotFound) {
+	if !errors.Is(err, dberr.ErrRecordNotFound) {
 		return nil, err
 	}
 
@@ -89,7 +89,7 @@ func (repo *VideoRepo) FindOrCreateTag(name string) (*Tag, error) {
 	}
 
 	// 处理唯一索引冲突，防止并发创建同一个tag
-	if db.IsDuplicateKeyError(err) {
+	if dberr.IsDuplicateKeyError(err) {
 		err = repo.db.Where("name = ?", name).First(tag).Error
 		return tag, err
 	}
@@ -150,7 +150,7 @@ func (repo *VideoRepo) IncreaseLikesCount(id uint) error {
 	}
 	// 还应检查RowsAffected，如果视频不存在、状态不对、或者 likes_count > 0 条件没命中，Error 仍可能是 nil
 	if res.RowsAffected == 0 {
-		return db.ErrRecordNotFound
+		return dberr.ErrRecordNotFound
 	}
 	return nil
 }
@@ -169,7 +169,7 @@ func (repo *VideoRepo) DecreaseLikesCount(id uint) error {
 	// likes_count 已经是 0
 	// 通常情况是likes_count 已经是 0，后面改成更明确的错误
 	if res.RowsAffected == 0 {
-		return db.ErrRecordNotFound
+		return dberr.ErrRecordNotFound
 	}
 
 	return nil
@@ -193,7 +193,7 @@ func (repo *VideoRepo) IncreaseCommentsCount(id uint) error {
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
-		return db.ErrRecordNotFound
+		return dberr.ErrRecordNotFound
 	}
 	return nil
 }
@@ -212,7 +212,7 @@ func (repo *VideoRepo) DecreaseCommentsCount(id uint) error {
 	// comments_count 已经是 0
 	// 通常情况是comments_count 已经是 0，后面改成更明确的错误
 	if res.RowsAffected == 0 {
-		return db.ErrRecordNotFound
+		return dberr.ErrRecordNotFound
 	}
 
 	return nil

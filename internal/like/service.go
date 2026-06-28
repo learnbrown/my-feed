@@ -2,7 +2,7 @@ package like
 
 import (
 	"errors"
-	"my_feed/internal/db"
+	"my_feed/internal/dberr"
 	"my_feed/internal/video"
 	"time"
 )
@@ -37,7 +37,7 @@ func (service *LikeService) Like(accountID, videoID uint) (uint, error) {
 		// 查询视频是否存在
 		_, err := videoRepo.FindVideoByID(videoID)
 		if err != nil {
-			if errors.Is(err, db.ErrRecordNotFound) {
+			if errors.Is(err, dberr.ErrRecordNotFound) {
 				return ErrVideoNotFound
 			}
 			return err
@@ -47,7 +47,7 @@ func (service *LikeService) Like(accountID, videoID uint) (uint, error) {
 		err = likeRepo.CreateLike(accountID, videoID)
 		if err != nil {
 			// 唯一索引冲突，查询likes_count并返回成功
-			if db.IsDuplicateKeyError(err) {
+			if dberr.IsDuplicateKeyError(err) {
 				cnt, err := videoRepo.GetLikesCount(videoID)
 				if err != nil {
 					return err
@@ -61,7 +61,7 @@ func (service *LikeService) Like(accountID, videoID uint) (uint, error) {
 		// 更新video字段
 		err = videoRepo.IncreaseLikesCount(videoID)
 		if err != nil {
-			if errors.Is(err, db.ErrRecordNotFound) {
+			if errors.Is(err, dberr.ErrRecordNotFound) {
 				return ErrVideoNotFound
 			}
 			return err
@@ -94,7 +94,7 @@ func (service *LikeService) Unlike(accountID, videoID uint) (uint, error) {
 		// 查看视频是否存在
 		_, err := videoRepo.FindVideoByID(videoID)
 		if err != nil {
-			if errors.Is(err, db.ErrRecordNotFound) {
+			if errors.Is(err, dberr.ErrRecordNotFound) {
 				return ErrVideoNotFound
 			}
 			return err
@@ -117,7 +117,7 @@ func (service *LikeService) Unlike(accountID, videoID uint) (uint, error) {
 		// 更新video字段
 		err = videoRepo.DecreaseLikesCount(videoID)
 		if err != nil {
-			if errors.Is(err, db.ErrRecordNotFound) {
+			if errors.Is(err, dberr.ErrRecordNotFound) {
 				return ErrVideoNotFound
 			}
 			return err

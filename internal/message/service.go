@@ -3,7 +3,7 @@ package message
 import (
 	"errors"
 	"my_feed/internal/account"
-	"my_feed/internal/db"
+	"my_feed/internal/dberr"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -50,7 +50,7 @@ func (service *MessageService) SendMessage(fromID, toID uint, content string) (*
 
 	_, err := service.accountRepo.FindAccountByID(toID)
 	if err != nil {
-		if errors.Is(err, db.ErrRecordNotFound) {
+		if errors.Is(err, dberr.ErrRecordNotFound) {
 			return nil, ErrAccountNotFound
 		}
 		return nil, err
@@ -103,7 +103,7 @@ func (service *MessageService) ListConversation(fromID, toID uint, limit int, la
 
 	_, err := service.accountRepo.FindAccountByID(toID)
 	if err != nil {
-		if errors.Is(err, db.ErrRecordNotFound) {
+		if errors.Is(err, dberr.ErrRecordNotFound) {
 			return nil, ErrAccountNotFound
 		}
 		return nil, err

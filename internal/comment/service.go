@@ -2,7 +2,7 @@ package comment
 
 import (
 	"errors"
-	"my_feed/internal/db"
+	"my_feed/internal/dberr"
 	"my_feed/internal/video"
 	"strings"
 	"time"
@@ -58,7 +58,7 @@ func (service *CommentService) CreateComment(accountID, videoID uint, content st
 	err := service.repo.Transaction(func(commentRepo *CommentRepo, videoRepo *video.VideoRepo) error {
 		_, err := videoRepo.FindVideoByID(videoID)
 		if err != nil {
-			if errors.Is(err, db.ErrRecordNotFound) {
+			if errors.Is(err, dberr.ErrRecordNotFound) {
 				return ErrVideoNotFound
 			}
 			return err
@@ -73,7 +73,7 @@ func (service *CommentService) CreateComment(accountID, videoID uint, content st
 
 		err = videoRepo.IncreaseCommentsCount(videoID)
 		if err != nil {
-			if errors.Is(err, db.ErrRecordNotFound) {
+			if errors.Is(err, dberr.ErrRecordNotFound) {
 				return ErrVideoNotFound
 			}
 			return err
@@ -117,7 +117,7 @@ func (service *CommentService) DeleteComment(accountID, commentID uint) (uint, e
 	err := service.repo.Transaction(func(commentRepo *CommentRepo, videoRepo *video.VideoRepo) error {
 		comment, err := commentRepo.FindCommentByID(commentID)
 		if err != nil {
-			if errors.Is(err, db.ErrRecordNotFound) {
+			if errors.Is(err, dberr.ErrRecordNotFound) {
 				return ErrCommentNotFound
 			}
 			return err
@@ -125,7 +125,7 @@ func (service *CommentService) DeleteComment(accountID, commentID uint) (uint, e
 
 		err = commentRepo.DeleteComment(accountID, commentID)
 		if err != nil {
-			if errors.Is(err, db.ErrRecordNotFound) {
+			if errors.Is(err, dberr.ErrRecordNotFound) {
 				return ErrCommentNotFound
 			}
 			return err
@@ -133,7 +133,7 @@ func (service *CommentService) DeleteComment(accountID, commentID uint) (uint, e
 
 		err = videoRepo.DecreaseCommentsCount(comment.VideoID)
 		if err != nil {
-			if errors.Is(err, db.ErrRecordNotFound) {
+			if errors.Is(err, dberr.ErrRecordNotFound) {
 				return ErrVideoNotFound
 			}
 			return err

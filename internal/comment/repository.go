@@ -1,7 +1,7 @@
 package comment
 
 import (
-	"my_feed/internal/db"
+	"my_feed/internal/dberr"
 	"my_feed/internal/video"
 	"time"
 
@@ -45,7 +45,7 @@ func (repo *CommentRepo) DeleteComment(accountID, commentID uint) error {
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
-		return db.ErrRecordNotFound
+		return dberr.ErrRecordNotFound
 	}
 
 	return nil

@@ -3,7 +3,7 @@ package follow
 import (
 	"errors"
 	"my_feed/internal/account"
-	"my_feed/internal/db"
+	"my_feed/internal/dberr"
 	"time"
 )
 
@@ -72,14 +72,14 @@ func (service *FollowService) Follow(followerID, vloggerID uint) error {
 	// 查看博主是否存在
 	_, err := service.accountRepo.FindAccountByID(vloggerID)
 	if err != nil {
-		if errors.Is(err, db.ErrRecordNotFound) {
+		if errors.Is(err, dberr.ErrRecordNotFound) {
 			return ErrVloggerNotFound
 		}
 		return err
 	}
 
 	err = service.followRepo.CreateFollow(followerID, vloggerID)
-	if err == nil || db.IsDuplicateKeyError(err) {
+	if err == nil || dberr.IsDuplicateKeyError(err) {
 		return nil
 	}
 
@@ -128,7 +128,7 @@ func (service *FollowService) ListFollower(vloggerID uint, limit int, latestTime
 	// 检查用户是否存在
 	_, err := service.accountRepo.FindAccountByID(vloggerID)
 	if err != nil {
-		if errors.Is(err, db.ErrRecordNotFound) {
+		if errors.Is(err, dberr.ErrRecordNotFound) {
 			return nil, ErrAccountNotFound
 		}
 		return nil, err
@@ -188,7 +188,7 @@ func (service *FollowService) ListFollowing(followerID uint, limit int, latestTi
 	// 检查用户是否存在
 	_, err := service.accountRepo.FindAccountByID(followerID)
 	if err != nil {
-		if errors.Is(err, db.ErrRecordNotFound) {
+		if errors.Is(err, dberr.ErrRecordNotFound) {
 			return nil, ErrAccountNotFound
 		}
 		return nil, err

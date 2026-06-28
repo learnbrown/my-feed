@@ -3,7 +3,7 @@ package profile
 import (
 	"errors"
 	"my_feed/internal/account"
-	"my_feed/internal/db"
+	"my_feed/internal/dberr"
 	"my_feed/internal/follow"
 	"my_feed/internal/video"
 )
@@ -58,7 +58,7 @@ func (service *ProfileService) GetProfile(accountID uint) (*Profile, error) {
 	// 查询用户信息
 	account, err := service.accountRepo.FindAccountByID(accountID)
 	if err != nil {
-		if errors.Is(err, db.ErrRecordNotFound) {
+		if errors.Is(err, dberr.ErrRecordNotFound) {
 			return nil, ErrAccountNotFound
 		}
 		return nil, err

@@ -16,7 +16,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func InitRouter(db *gorm.DB) (router *gin.Engine) {
+func SetRouter(sqlDB *gorm.DB) (router *gin.Engine) {
 	router = gin.Default()
 
 	router.StaticFile("/", ".run/template/index.html")
@@ -29,7 +29,7 @@ func InitRouter(db *gorm.DB) (router *gin.Engine) {
 	})
 
 	accountRouter := router.Group("/account")
-	accountRepo := account.NewAccountRepo(db)
+	accountRepo := account.NewAccountRepo(sqlDB)
 	accountService := account.NewAccountService(accountRepo)
 	accountHandler := account.NewAccountHandler(accountService)
 	{
@@ -48,7 +48,7 @@ func InitRouter(db *gorm.DB) (router *gin.Engine) {
 	}
 
 	videoRouter := router.Group("/video")
-	videoRepo := video.NewVideoRepo(db)
+	videoRepo := video.NewVideoRepo(sqlDB)
 	videoService := video.NewVideoService(videoRepo)
 	videoHandler := video.NewVideoHandler(videoService)
 	{
@@ -74,7 +74,7 @@ func InitRouter(db *gorm.DB) (router *gin.Engine) {
 
 	likeRouter := router.Group("/like")
 	likeRouter.Use(middleware.JWTAuth(accountRepo))
-	likeRepo := like.NewLikeRepo(db)
+	likeRepo := like.NewLikeRepo(sqlDB)
 	likeService := like.NewLikeService(likeRepo)
 	likeHandler := like.NewLikeHandler(likeService)
 	{
@@ -85,7 +85,7 @@ func InitRouter(db *gorm.DB) (router *gin.Engine) {
 	}
 
 	commentRouter := router.Group("/comment")
-	commentRepo := comment.NewCommentRepo(db)
+	commentRepo := comment.NewCommentRepo(sqlDB)
 	commentService := comment.NewCommentService(commentRepo)
 	commentHandler := comment.NewCommentHandler(commentService)
 	{
@@ -100,7 +100,7 @@ func InitRouter(db *gorm.DB) (router *gin.Engine) {
 	}
 
 	followRouter := router.Group("/follow")
-	followRepo := follow.NewFollowRepo(db)
+	followRepo := follow.NewFollowRepo(sqlDB)
 	followService := follow.NewFollowService(followRepo, accountRepo)
 	followHandler := follow.NewFollowHandler(followService)
 	{
@@ -118,7 +118,7 @@ func InitRouter(db *gorm.DB) (router *gin.Engine) {
 
 	messageRouter := router.Group("/message")
 	messageRouter.Use(middleware.JWTAuth(accountRepo))
-	messageRepo := message.NewMessageRepo(db)
+	messageRepo := message.NewMessageRepo(sqlDB)
 	messageService := message.NewMessageService(messageRepo, accountRepo)
 	messageHandler := message.NewMessageHandler(messageService)
 	{

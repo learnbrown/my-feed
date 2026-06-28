@@ -2,7 +2,7 @@ package like
 
 import (
 	"errors"
-	"my_feed/internal/db"
+	"my_feed/internal/dberr"
 	"my_feed/internal/video"
 	"time"
 
@@ -35,7 +35,7 @@ func (repo *LikeRepo) ExistsLike(accountID, videoID uint) (bool, error) {
 	if err == nil {
 		return true, nil
 	}
-	if errors.Is(err, db.ErrRecordNotFound) {
+	if errors.Is(err, dberr.ErrRecordNotFound) {
 		return false, nil
 	}
 

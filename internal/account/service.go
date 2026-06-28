@@ -4,7 +4,7 @@ package account
 import (
 	"errors"
 	"my_feed/internal/auth"
-	"my_feed/internal/db"
+	"my_feed/internal/dberr"
 	"strings"
 
 	"golang.org/x/crypto/bcrypt"
@@ -65,7 +65,7 @@ func (service *AccountService) Register(username string, password string) (*Acco
 	if err != nil {
 		// [x]并发场景下可能会触发唯一索引错误
 		// 查重后有用户注册
-		if db.IsDuplicateKeyError(err) {
+		if dberr.IsDuplicateKeyError(err) {
 			return nil, ErrUsernameExists
 		}
 		return nil, err
@@ -86,7 +86,7 @@ func (service *AccountService) Login(username string, password string) (*Account
 	if err != nil {
 		// 用户不存在或密码错误返回相同的信息，避免泄漏用户名是否存在的信息
 		// 将未查到用户和数据库错误的处理分开
-		if errors.Is(err, db.ErrRecordNotFound) {
+		if errors.Is(err, dberr.ErrRecordNotFound) {
 			return nil, ErrInvalidUsernameOrPassword
 		}
 		return nil, err
@@ -117,7 +117,7 @@ func (service *AccountService) Login(username string, password string) (*Account
 
 func (service *AccountService) Logout(id uint) error {
 	err := service.repo.UpdateToken(id, "")
-	if errors.Is(err, db.ErrRecordNotFound) {
+	if errors.Is(err, dberr.ErrRecordNotFound) {
 		return ErrAccountNotFound
 	}
 	return err
@@ -125,7 +125,7 @@ func (service *AccountService) Logout(id uint) error {
 
 func (service *AccountService) Me(id uint) (*Account, error) {
 	acc, err := service.repo.FindAccountByID(id)
-	if errors.Is(err, db.ErrRecordNotFound) {
+	if errors.Is(err, dberr.ErrRecordNotFound) {
 		return nil, ErrAccountNotFound
 	}
 	return acc, err

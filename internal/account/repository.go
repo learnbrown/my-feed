@@ -2,8 +2,6 @@
 package account
 
 import (
-	"my_feed/internal/db"
-
 	"gorm.io/gorm"
 )
 
@@ -31,7 +29,7 @@ func (repo *AccountRepo) UpdateToken(id uint, token string) error {
 	}
 
 	if result.RowsAffected == 0 {
-		return db.ErrRecordNotFound
+		return gorm.ErrRecordNotFound
 	}
 
 	return nil
