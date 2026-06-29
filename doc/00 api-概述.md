@@ -5,7 +5,7 @@
 - Base URL: `http://localhost:8080`
 - JSON 接口请求头：`Content-Type: application/json`
 - 需要登录的接口请求头：`Authorization: Bearer <token>`
-- Feed 分页使用 `latest_time` 游标，第一页传 `0` 或不传；下一页传上一次响应中的 `next_time`。
+- Feed 分页使用 `latest_time`和`latest_id`游标，第一页传 `0` 或不传；下一页传上一次响应中的 `next_time`和`next_id`。
 - `limit` 可选，默认 `20`，最大 `50`。
 
 ### 通用错误响应
