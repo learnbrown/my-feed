@@ -3,12 +3,13 @@ package router
 
 import (
 	"my_feed/internal/account"
+	"my_feed/internal/cache"
 	"my_feed/internal/comment"
 	"my_feed/internal/feed"
 	"my_feed/internal/follow"
 	"my_feed/internal/like"
 	"my_feed/internal/message"
-	"my_feed/internal/middleware"
+	"my_feed/internal/middleware/jwt"
 	"my_feed/internal/profile"
 	"my_feed/internal/video"
 
@@ -16,7 +17,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func SetRouter(sqlDB *gorm.DB) (router *gin.Engine) {
+func SetRouter(sqlDB *gorm.DB, rediscache *cache.Client) (router *gin.Engine) {
 	router = gin.Default()
 
 	router.StaticFile("/", ".run/template/index.html")
@@ -30,7 +31,8 @@ func SetRouter(sqlDB *gorm.DB) (router *gin.Engine) {
 
 	accountRouter := router.Group("/account")
 	accountRepo := account.NewAccountRepo(sqlDB)
-	accountService := account.NewAccountService(accountRepo)
+	accountCache := account.NewRedisTokenCache(rediscache)
+	accountService := account.NewAccountService(accountRepo, accountCache)
 	accountHandler := account.NewAccountHandler(accountService)
 	{
 		accountRouter.POST("/register", accountHandler.Register)
@@ -38,7 +40,7 @@ func SetRouter(sqlDB *gorm.DB) (router *gin.Engine) {
 
 		// 以下路由需鉴权
 		protected := accountRouter.Group("")
-		protected.Use(middleware.JWTAuth(accountRepo))
+		protected.Use(jwt.JWTAuth(accountRepo, accountCache))
 		{
 			protected.POST("/logout", accountHandler.Logout)
 
@@ -56,7 +58,7 @@ func SetRouter(sqlDB *gorm.DB) (router *gin.Engine) {
 		videoRouter.POST("/listByAuthorID", videoHandler.ListByAuthorID)
 
 		protected := videoRouter.Group("")
-		protected.Use(middleware.JWTAuth(accountRepo))
+		protected.Use(jwt.JWTAuth(accountRepo, accountCache))
 		{
 			protected.POST("/publish", videoHandler.PublishVideo)
 			protected.POST("/uploadVideo", videoHandler.UploadVideo)
@@ -73,7 +75,7 @@ func SetRouter(sqlDB *gorm.DB) (router *gin.Engine) {
 	}
 
 	likeRouter := router.Group("/like")
-	likeRouter.Use(middleware.JWTAuth(accountRepo))
+	likeRouter.Use(jwt.JWTAuth(accountRepo, accountCache))
 	likeRepo := like.NewLikeRepo(sqlDB)
 	likeService := like.NewLikeService(likeRepo)
 	likeHandler := like.NewLikeHandler(likeService)
@@ -92,7 +94,7 @@ func SetRouter(sqlDB *gorm.DB) (router *gin.Engine) {
 		commentRouter.POST("/listComment", commentHandler.ListComment)
 
 		protected := commentRouter.Group("")
-		protected.Use(middleware.JWTAuth(accountRepo))
+		protected.Use(jwt.JWTAuth(accountRepo, accountCache))
 		{
 			protected.POST("/publish", commentHandler.Publish)
 			protected.POST("/delete", commentHandler.Delete)
@@ -108,7 +110,7 @@ func SetRouter(sqlDB *gorm.DB) (router *gin.Engine) {
 		followRouter.POST("/listFollowing", followHandler.ListFollowing)
 
 		protected := followRouter.Group("")
-		protected.Use(middleware.JWTAuth(accountRepo))
+		protected.Use(jwt.JWTAuth(accountRepo, accountCache))
 		{
 			protected.POST("/isFollowing", followHandler.IsFollowing)
 			protected.POST("/follow", followHandler.Follow)
@@ -117,7 +119,7 @@ func SetRouter(sqlDB *gorm.DB) (router *gin.Engine) {
 	}
 
 	messageRouter := router.Group("/message")
-	messageRouter.Use(middleware.JWTAuth(accountRepo))
+	messageRouter.Use(jwt.JWTAuth(accountRepo, accountCache))
 	messageRepo := message.NewMessageRepo(sqlDB)
 	messageService := message.NewMessageService(messageRepo, accountRepo)
 	messageHandler := message.NewMessageHandler(messageService)

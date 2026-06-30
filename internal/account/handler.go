@@ -79,7 +79,7 @@ func (handler *AccountHandler) Login(c *gin.Context) {
 		return
 	}
 
-	acc, err := handler.service.Login(input.Username, input.Password)
+	acc, err := handler.service.Login(c.Request.Context(), input.Username, input.Password)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrInvalidUsernameOrPassword):
@@ -116,7 +116,7 @@ func (handler *AccountHandler) Logout(c *gin.Context) {
 		return
 	}
 
-	err := handler.service.Logout(userID)
+	err := handler.service.Logout(c.Request.Context(), userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),

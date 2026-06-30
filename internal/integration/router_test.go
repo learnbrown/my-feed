@@ -16,5 +16,5 @@ func setupTestRouter(t *testing.T) *gin.Engine {
 	sqlDB := dbtest.SetupTestDB(t)
 	dbtest.CleanTestDB(t, sqlDB)
 
-	return router.SetRouter(sqlDB)
+	return router.SetRouter(sqlDB, nil)
 }

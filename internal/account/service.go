@@ -2,20 +2,24 @@
 package account
 
 import (
+	"context"
 	"errors"
+	"log"
 	"my_feed/internal/auth"
 	"my_feed/internal/dberr"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
 
 type AccountService struct {
-	repo *AccountRepo
+	repo       *AccountRepo
+	tokenCache TokenCache
 }
 
-func NewAccountService(repo *AccountRepo) *AccountService {
-	return &AccountService{repo: repo}
+func NewAccountService(repo *AccountRepo, tokenCache TokenCache) *AccountService {
+	return &AccountService{repo: repo, tokenCache: tokenCache}
 }
 
 // 定义错误类型
@@ -25,6 +29,7 @@ var (
 	ErrPasswordRequired          = errors.New("password required")
 	ErrInvalidUsernameOrPassword = errors.New("invalid username or password")
 	ErrAccountNotFound           = errors.New("account not found")
+	ErrDelCacheFailed            = errors.New("failed to delete cacha")
 )
 
 func (service *AccountService) Register(username string, password string) (*Account, error) {
@@ -74,7 +79,7 @@ func (service *AccountService) Register(username string, password string) (*Acco
 	return acc, nil
 }
 
-func (service *AccountService) Login(username string, password string) (*Account, error) {
+func (service *AccountService) Login(ctx context.Context, username string, password string) (*Account, error) {
 	// 查询用户是否存在
 	username = strings.TrimSpace(username)
 
@@ -104,6 +109,17 @@ func (service *AccountService) Login(username string, password string) (*Account
 		return nil, err
 	}
 
+	// 清除redis中的旧token
+	delCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	defer cancel()
+	err = service.tokenCache.DelToken(delCtx, acc.ID)
+	if err != nil {
+		log.Printf("Failed to delete token cache: %v", err)
+		return nil, ErrDelCacheFailed
+	} else {
+		log.Printf("Successfully delete token cacahe")
+	}
+
 	// 更新用户记录
 	err = service.repo.UpdateToken(acc.ID, token)
 	if err != nil {
@@ -112,11 +128,32 @@ func (service *AccountService) Login(username string, password string) (*Account
 
 	acc.Token = token
 
+	// 写入redis
+	setCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	defer cancel()
+	err = service.tokenCache.SetToken(setCtx, acc.ID, token, 2*time.Hour)
+	if err != nil {
+		log.Printf("Failed to set token cache: %v", err)
+	} else {
+		log.Printf("Successfully set token cache")
+	}
+
 	return acc, nil
 }
 
-func (service *AccountService) Logout(id uint) error {
-	err := service.repo.UpdateToken(id, "")
+func (service *AccountService) Logout(ctx context.Context, id uint) error {
+	// 先删除redis
+	delCtx, cancel := context.WithTimeout(ctx, 50*time.Microsecond)
+	defer cancel()
+	err := service.tokenCache.DelToken(delCtx, id)
+	if err != nil {
+		log.Printf("Failed to delete token cache: %v", err)
+		return ErrDelCacheFailed
+	} else {
+		log.Printf("Successfully delete token caches")
+	}
+
+	err = service.repo.UpdateToken(id, "")
 	if errors.Is(err, dberr.ErrRecordNotFound) {
 		return ErrAccountNotFound
 	}

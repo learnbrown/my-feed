@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"log"
+	"my_feed/internal/cache"
 	"my_feed/internal/config"
 	"my_feed/internal/db"
 	"my_feed/internal/router"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -44,8 +47,25 @@ func main() {
 		log.Fatalf("Failed to auto migrate database: %v", err)
 	}
 
+	// 连接Redis
+	rediscache, err := cache.NewRedis(&cfg.Redis)
+	if err != nil {
+		log.Printf("Failed to connect redis (cache disabled): %v", err)
+	} else {
+		pingCtx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+		defer cancel()
+		if err := rediscache.Ping(pingCtx); err != nil {
+			log.Printf("Redis not available (cache disabled): %v", err)
+			_ = rediscache.Close()
+			rediscache = nil
+		} else {
+			defer rediscache.Close()
+			log.Printf("Redis connected (cache enabled)")
+		}
+	}
+
 	// 设置路由
-	r := router.SetRouter(sqlDB)
+	r := router.SetRouter(sqlDB, rediscache)
 
 	err = r.Run(":" + strconv.Itoa(cfg.Server.Port))
 	if err != nil {

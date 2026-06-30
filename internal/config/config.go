@@ -12,6 +12,7 @@ import (
 type Config struct {
 	Server   ServerConfig   `yaml:"server"`
 	Database DatabaseConfig `yaml:"database"`
+	Redis    RedisConfig    `yaml:"redis"`
 }
 
 type ServerConfig struct {
@@ -24,6 +25,15 @@ type DatabaseConfig struct {
 	User     string `yaml:"user"`
 	Password string `yaml:"password"`
 	DBName   string `yaml:"dbname"`
+}
+
+type RedisConfig struct {
+	Host      string `yaml:"host"`
+	Port      int    `yaml:"port"`
+	Password  string `yaml:"password"`
+	DB        int    `yaml:"db"`
+	KeyPrefix string `yaml:"key_prefix"`
+	Enabled   bool   `yaml:"enabled"`
 }
 
 func Load(filename string) (Config, error) {
@@ -70,6 +80,33 @@ func ApplyEnvOverrides(cfg *Config) {
 	if v := os.Getenv("MYSQL_DBNAME"); v != "" {
 		cfg.Database.DBName = v
 	}
+	if v := os.Getenv("REDIS_HOST"); v != "" {
+		cfg.Redis.Host = v
+	}
+	if v := os.Getenv("REDIS_PORT"); v != "" {
+		if port, err := strconv.Atoi(v); err == nil {
+			cfg.Redis.Port = port
+		}
+	}
+	if v := os.Getenv("REDIS_PASSWORD"); v != "" {
+		cfg.Redis.Password = v
+	}
+	if v := os.Getenv("REDIS_DB"); v != "" {
+		if db, err := strconv.Atoi(v); err == nil {
+			cfg.Redis.DB = db
+		}
+	}
+	if v := os.Getenv("REDIS_KEY_PREFIX"); v != "" {
+		cfg.Redis.KeyPrefix = v
+	}
+	if v := os.Getenv("REDIS_ENABLED"); v != "" {
+		switch v {
+		case "true":
+			cfg.Redis.Enabled = true
+		case "false":
+			cfg.Redis.Enabled = false
+		}
+	}
 }
 
 // bool用来表示是否使用了默认配置，true表示使用了默认配置
@@ -95,6 +132,14 @@ func DefaultLocalConfig() Config {
 			User:     "dev_user",
 			Password: "qwerdf",
 			DBName:   "myfeed",
+		},
+		Redis: RedisConfig{
+			Host:      "localhost",
+			Port:      6379,
+			Password:  "",
+			DB:        0,
+			KeyPrefix: "myfeed",
+			Enabled:   true,
 		},
 	}
 	ApplyEnvOverrides(&cfg)

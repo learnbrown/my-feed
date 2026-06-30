@@ -1,0 +1,53 @@
+package account
+
+import (
+	"context"
+	"errors"
+	"my_feed/internal/cache"
+	"time"
+
+	"github.com/redis/go-redis/v9"
+)
+
+type TokenCache interface {
+	GetToken(ctx context.Context, accountID uint) (string, bool, error)
+	SetToken(ctx context.Context, accountID uint, token string, ttl time.Duration) error
+	DelToken(ctx context.Context, accountID uint) error
+}
+
+type RedisTokenCache struct {
+	cache *cache.Client
+}
+
+func NewRedisTokenCache(cache *cache.Client) *RedisTokenCache {
+	return &RedisTokenCache{cache: cache}
+}
+
+func (tc *RedisTokenCache) GetToken(ctx context.Context, accountID uint) (string, bool, error) {
+	if tc.cache == nil || !tc.cache.Enabled() {
+		return "", false, nil
+	}
+	key := tc.cache.AccountTokenKey(accountID)
+	b, err := tc.cache.GetBytes(ctx, key)
+	if errors.Is(err, redis.Nil) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return string(b), true, nil
+}
+
+func (tc *RedisTokenCache) SetToken(ctx context.Context, accountID uint, token string, ttl time.Duration) error {
+	if tc.cache == nil || !tc.cache.Enabled() {
+		return nil
+	}
+	return tc.cache.SetBytes(ctx, tc.cache.AccountTokenKey(accountID), []byte(token), ttl)
+}
+
+func (tc *RedisTokenCache) DelToken(ctx context.Context, accountID uint) error {
+	if tc.cache == nil || !tc.cache.Enabled() {
+		return nil
+	}
+	return tc.cache.Del(ctx, tc.cache.AccountTokenKey(accountID))
+}
