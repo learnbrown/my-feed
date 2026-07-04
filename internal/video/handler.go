@@ -86,7 +86,7 @@ func (handler *VideoHandler) GetDetail(c *gin.Context) {
 		return
 	}
 
-	video, err := handler.service.GetDetail(input.ID)
+	video, err := handler.service.GetDetail(c.Request.Context(), input.ID)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrVideoNotFound):

@@ -40,7 +40,7 @@ func (handler *CommentHandler) Publish(c *gin.Context) {
 		return
 	}
 
-	comment, cnt, err := handler.service.CreateComment(accountID, input.VideoID, input.Content)
+	comment, cnt, err := handler.service.CreateComment(c.Request.Context(), accountID, input.VideoID, input.Content)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrAuthorRequired):
@@ -95,7 +95,7 @@ func (handler *CommentHandler) Delete(c *gin.Context) {
 		return
 	}
 
-	cnt, err := handler.service.DeleteComment(accountID, input.CommentID)
+	cnt, err := handler.service.DeleteComment(c.Request.Context(), accountID, input.CommentID)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrAuthorRequired):

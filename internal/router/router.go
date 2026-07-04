@@ -51,7 +51,8 @@ func SetRouter(sqlDB *gorm.DB, rediscache *cache.Client) (router *gin.Engine) {
 
 	videoRouter := router.Group("/video")
 	videoRepo := video.NewVideoRepo(sqlDB)
-	videoService := video.NewVideoService(videoRepo)
+	videoCache := video.NewRedisDetailCache(rediscache)
+	videoService := video.NewVideoService(videoRepo, videoCache)
 	videoHandler := video.NewVideoHandler(videoService)
 	{
 		videoRouter.POST("/getDetail", videoHandler.GetDetail)
@@ -77,7 +78,7 @@ func SetRouter(sqlDB *gorm.DB, rediscache *cache.Client) (router *gin.Engine) {
 	likeRouter := router.Group("/like")
 	likeRouter.Use(jwt.JWTAuth(accountRepo, accountCache))
 	likeRepo := like.NewLikeRepo(sqlDB)
-	likeService := like.NewLikeService(likeRepo)
+	likeService := like.NewLikeService(likeRepo, videoCache)
 	likeHandler := like.NewLikeHandler(likeService)
 	{
 		likeRouter.POST("/like", likeHandler.Like)
@@ -88,7 +89,7 @@ func SetRouter(sqlDB *gorm.DB, rediscache *cache.Client) (router *gin.Engine) {
 
 	commentRouter := router.Group("/comment")
 	commentRepo := comment.NewCommentRepo(sqlDB)
-	commentService := comment.NewCommentService(commentRepo)
+	commentService := comment.NewCommentService(commentRepo, videoCache)
 	commentHandler := comment.NewCommentHandler(commentService)
 	{
 		commentRouter.POST("/listComment", commentHandler.ListComment)

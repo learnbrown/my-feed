@@ -1,7 +1,10 @@
 package comment
 
 import (
+	"context"
 	"errors"
+	"log"
+	"my_feed/internal/cache"
 	"my_feed/internal/dberr"
 	"my_feed/internal/video"
 	"strings"
@@ -21,11 +24,12 @@ var (
 )
 
 type CommentService struct {
-	repo *CommentRepo
+	repo  *CommentRepo
+	cache video.DetailCache
 }
 
-func NewCommentService(repo *CommentRepo) *CommentService {
-	return &CommentService{repo: repo}
+func NewCommentService(repo *CommentRepo, cache video.DetailCache) *CommentService {
+	return &CommentService{repo: repo, cache: cache}
 }
 
 type CommentDTO struct {
@@ -36,7 +40,7 @@ type CommentDTO struct {
 	CreatedAt int64  `json:"created_at"`
 }
 
-func (service *CommentService) CreateComment(accountID, videoID uint, content string) (*CommentDTO, uint, error) {
+func (service *CommentService) CreateComment(ctx context.Context, accountID, videoID uint, content string) (*CommentDTO, uint, error) {
 	if accountID == 0 {
 		return nil, 0, ErrAuthorRequired
 	}
@@ -93,6 +97,20 @@ func (service *CommentService) CreateComment(accountID, videoID uint, content st
 		return nil, 0, err
 	}
 
+	// 删除detail缓存
+	if service.cache != nil {
+		delCtx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		defer cancel()
+		err = service.cache.DelDetail(delCtx, videoID)
+		if err == nil {
+			log.Printf("Successfully delete detail cache")
+		} else if errors.Is(err, cache.ErrDisabled) {
+			// skip
+		} else {
+			log.Printf("Failed to delete detail cache: %v", err)
+		}
+	}
+
 	dto := &CommentDTO{
 		ID:        comment.ID,
 		VideoID:   comment.VideoID,
@@ -104,7 +122,7 @@ func (service *CommentService) CreateComment(accountID, videoID uint, content st
 	return dto, commentsCount, nil
 }
 
-func (service *CommentService) DeleteComment(accountID, commentID uint) (uint, error) {
+func (service *CommentService) DeleteComment(ctx context.Context, accountID, commentID uint) (uint, error) {
 	if accountID == 0 {
 		return 0, ErrAuthorRequired
 	}
@@ -113,6 +131,7 @@ func (service *CommentService) DeleteComment(accountID, commentID uint) (uint, e
 	}
 
 	var commentsCount uint
+	var videoID uint
 
 	err := service.repo.Transaction(func(commentRepo *CommentRepo, videoRepo *video.VideoRepo) error {
 		comment, err := commentRepo.FindCommentByID(commentID)
@@ -145,12 +164,27 @@ func (service *CommentService) DeleteComment(accountID, commentID uint) (uint, e
 		}
 
 		commentsCount = cnt
+		videoID = comment.VideoID
 
 		return nil
 	})
 
 	if err != nil {
 		return 0, err
+	}
+
+	// 删除detail缓存
+	if service.cache != nil {
+		delCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+		defer cancel()
+		err = service.cache.DelDetail(delCtx, videoID)
+		if err == nil {
+			log.Printf("Successfully delete detail cache")
+		} else if errors.Is(err, cache.ErrDisabled) {
+			// skip
+		} else {
+			log.Printf("Failed to delete detail cache: %v", err)
+		}
 	}
 
 	return commentsCount, nil

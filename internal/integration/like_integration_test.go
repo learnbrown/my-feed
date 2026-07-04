@@ -41,9 +41,9 @@ func TestLikeIdempotentWithDB(t *testing.T) {
 	}
 
 	likeRepo := like.NewLikeRepo(sqlDB)
-	likeService := like.NewLikeService(likeRepo)
+	likeService := like.NewLikeService(likeRepo, nil)
 
-	likesCount, err := likeService.Like(liker.ID, v.ID)
+	likesCount, err := likeService.Like(nil, liker.ID, v.ID)
 	if err != nil {
 		t.Fatalf("first like failed: %v", err)
 	}
@@ -51,7 +51,7 @@ func TestLikeIdempotentWithDB(t *testing.T) {
 		t.Fatalf("first like expected likes_count 1, got %d", likesCount)
 	}
 
-	likesCount, err = likeService.Like(liker.ID, v.ID)
+	likesCount, err = likeService.Like(nil, liker.ID, v.ID)
 	if err != nil {
 		t.Fatalf("second like failed: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestLikeConcurrentIdempotent(t *testing.T) {
 	}
 
 	likeRepo := like.NewLikeRepo(sqlDB)
-	likeService := like.NewLikeService(likeRepo)
+	likeService := like.NewLikeService(likeRepo, nil)
 
 	concurrency := 20
 
@@ -125,7 +125,7 @@ func TestLikeConcurrentIdempotent(t *testing.T) {
 	errChan := make(chan error, concurrency)
 	for i := 0; i < concurrency; i++ {
 		go func() {
-			cnt, err := likeService.Like(liker.ID, v.ID)
+			cnt, err := likeService.Like(nil, liker.ID, v.ID)
 			cntChan <- cnt
 			errChan <- err
 		}()

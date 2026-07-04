@@ -1,7 +1,10 @@
 package like
 
 import (
+	"context"
 	"errors"
+	"log"
+	"my_feed/internal/cache"
 	"my_feed/internal/dberr"
 	"my_feed/internal/video"
 	"time"
@@ -16,14 +19,15 @@ var (
 )
 
 type LikeService struct {
-	repo *LikeRepo
+	repo  *LikeRepo
+	cache video.DetailCache
 }
 
-func NewLikeService(repo *LikeRepo) *LikeService {
-	return &LikeService{repo: repo}
+func NewLikeService(repo *LikeRepo, cache video.DetailCache) *LikeService {
+	return &LikeService{repo: repo, cache: cache}
 }
 
-func (service *LikeService) Like(accountID, videoID uint) (uint, error) {
+func (service *LikeService) Like(ctx context.Context, accountID, videoID uint) (uint, error) {
 	if accountID == 0 {
 		return 0, ErrAuthorRequired
 	}
@@ -32,6 +36,8 @@ func (service *LikeService) Like(accountID, videoID uint) (uint, error) {
 	}
 
 	var likes uint
+	// 记录是否点赞记录是否变化了
+	changed := false
 
 	err := service.repo.Transaction(func(likeRepo *LikeRepo, videoRepo *video.VideoRepo) error {
 		// 查询视频是否存在
@@ -74,13 +80,35 @@ func (service *LikeService) Like(accountID, videoID uint) (uint, error) {
 		}
 		likes = cnt
 
+		changed = true
+
 		return nil
 	})
 
-	return likes, err
+	if err != nil {
+		return 0, err
+	}
+
+	if changed {
+		// 删除detail缓存
+		if service.cache != nil {
+			delCtx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+			defer cancel()
+			err = service.cache.DelDetail(delCtx, videoID)
+			if err == nil {
+				log.Printf("Successfully delete detail cache")
+			} else if errors.Is(err, cache.ErrDisabled) {
+				// skip
+			} else {
+				log.Printf("Failed to delete detail cache: %v", err)
+			}
+		}
+	}
+
+	return likes, nil
 }
 
-func (service *LikeService) Unlike(accountID, videoID uint) (uint, error) {
+func (service *LikeService) Unlike(ctx context.Context, accountID, videoID uint) (uint, error) {
 	if accountID == 0 {
 		return 0, ErrAuthorRequired
 	}
@@ -89,6 +117,7 @@ func (service *LikeService) Unlike(accountID, videoID uint) (uint, error) {
 	}
 
 	var likes uint
+	changed := false
 
 	err := service.repo.Transaction(func(likeRepo *LikeRepo, videoRepo *video.VideoRepo) error {
 		// 查看视频是否存在
@@ -130,11 +159,31 @@ func (service *LikeService) Unlike(accountID, videoID uint) (uint, error) {
 		}
 
 		likes = cnt
+		changed = true
 
 		return nil
 	})
 
-	return likes, err
+	if err != nil {
+		return 0, err
+	}
+
+	if changed {
+		// 删除detail缓存
+		if service.cache != nil {
+			delCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+			defer cancel()
+			err = service.cache.DelDetail(delCtx, videoID)
+			if err == nil {
+				log.Printf("Successfully delete detail cache")
+			} else if errors.Is(err, cache.ErrDisabled) {
+				// skip
+			} else {
+				log.Printf("Failed to delete detail cache: %v", err)
+			}
+		}
+	}
+	return likes, nil
 }
 
 // ListLikedVideos repo层返回格式

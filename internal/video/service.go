@@ -1,12 +1,15 @@
 package video
 
 import (
+	"context"
 	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"math/big"
 	"mime/multipart"
+	"my_feed/internal/cache"
 	"my_feed/internal/dberr"
 	"os"
 	"path/filepath"
@@ -17,11 +20,12 @@ import (
 )
 
 type VideoService struct {
-	repo *VideoRepo
+	repo  *VideoRepo
+	cache DetailCache
 }
 
-func NewVideoService(repo *VideoRepo) *VideoService {
-	return &VideoService{repo: repo}
+func NewVideoService(repo *VideoRepo, cache DetailCache) *VideoService {
+	return &VideoService{repo: repo, cache: cache}
 }
 
 const (
@@ -180,7 +184,29 @@ func (service *VideoService) Publish(authorID uint, title, description, video_ur
 	return dto, nil
 }
 
-func (service *VideoService) GetDetail(id uint) (*VideoDTO, error) {
+func (service *VideoService) GetDetail(ctx context.Context, id uint) (*VideoDTO, error) {
+	// 查redis
+	if service.cache != nil {
+		getCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+		defer cancel()
+
+		detailCache, hit, err := service.cache.GetDetail(getCtx, id)
+		if err == nil {
+			if hit {
+				log.Printf("Successfully get detail cache")
+				return &detailCache, nil
+			} else {
+				log.Printf("Miss detail cache")
+			}
+		} else if errors.Is(err, cache.ErrDisabled) {
+			// skip
+			log.Printf("Failed to get detail cache: %v", err)
+		} else {
+			log.Printf("Failed to get detail cache: %v", err)
+		}
+	}
+
+	// 查数据库
 	video, err := service.repo.FindVideoByID(id)
 	if err != nil {
 		if errors.Is(err, dberr.ErrRecordNotFound) {
@@ -190,6 +216,22 @@ func (service *VideoService) GetDetail(id uint) (*VideoDTO, error) {
 	}
 
 	dto := ToDTO(video)
+
+	// 写redis
+	if service.cache != nil {
+		setCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+		defer cancel()
+		err = service.cache.SetDetail(setCtx, id, *dto, 5*time.Minute)
+		if err == nil {
+			log.Printf("Successfully set detail cache")
+		} else if errors.Is(err, cache.ErrDisabled) {
+			// skip
+			log.Printf("Failed to set detail cache: %v", err)
+		} else {
+			log.Printf("Failed to set detail cache: %v", err)
+		}
+	}
+
 	return dto, nil
 }
 

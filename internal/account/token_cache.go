@@ -24,8 +24,8 @@ func NewRedisTokenCache(cache *cache.Client) *RedisTokenCache {
 }
 
 func (tc *RedisTokenCache) GetToken(ctx context.Context, accountID uint) (string, bool, error) {
-	if tc.cache == nil || !tc.cache.Enabled() {
-		return "", false, nil
+	if tc == nil || tc.cache == nil || !tc.cache.Enabled() {
+		return "", false, cache.ErrDisabled
 	}
 	key := tc.cache.AccountTokenKey(accountID)
 	b, err := tc.cache.GetBytes(ctx, key)
@@ -39,15 +39,15 @@ func (tc *RedisTokenCache) GetToken(ctx context.Context, accountID uint) (string
 }
 
 func (tc *RedisTokenCache) SetToken(ctx context.Context, accountID uint, token string, ttl time.Duration) error {
-	if tc.cache == nil || !tc.cache.Enabled() {
-		return nil
+	if tc == nil || tc.cache == nil || !tc.cache.Enabled() {
+		return cache.ErrDisabled
 	}
 	return tc.cache.SetBytes(ctx, tc.cache.AccountTokenKey(accountID), []byte(token), ttl)
 }
 
 func (tc *RedisTokenCache) DelToken(ctx context.Context, accountID uint) error {
-	if tc.cache == nil || !tc.cache.Enabled() {
-		return nil
+	if tc == nil || tc.cache == nil || !tc.cache.Enabled() {
+		return cache.ErrDisabled
 	}
 	return tc.cache.Del(ctx, tc.cache.AccountTokenKey(accountID))
 }

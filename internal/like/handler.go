@@ -39,7 +39,7 @@ func (handler *LikeHandler) Like(c *gin.Context) {
 		return
 	}
 
-	likesCount, err := handler.service.Like(accountID, input.VideoID)
+	likesCount, err := handler.service.Like(c.Request.Context(), accountID, input.VideoID)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrVideoRequired):
@@ -86,7 +86,7 @@ func (handler *LikeHandler) Unlike(c *gin.Context) {
 		return
 	}
 
-	likesCount, err := handler.service.Unlike(accountID, input.VideoID)
+	likesCount, err := handler.service.Unlike(c.Request.Context(), accountID, input.VideoID)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrVideoRequired):

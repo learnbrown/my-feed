@@ -44,7 +44,7 @@ func (c *Client) Close() error {
 
 func (c *Client) Ping(ctx context.Context) error {
 	if !c.Enabled() {
-		return fmt.Errorf("redis client is unavaliable")
+		return ErrDisabled
 	}
 	return c.rdb.Ping(ctx).Err()
 }
