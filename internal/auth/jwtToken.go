@@ -6,24 +6,36 @@ import (
 	"errors"
 	"log"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
+var (
+	fallbackSecretOnce sync.Once
+	fallbackSecret     []byte
+)
+
 // [x] 密钥放入配置文件中
 func jwtSecret() []byte {
 	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
+	if secret != "" {
+		return []byte(secret)
+	}
+
+	fallbackSecretOnce.Do(func() {
 		b := make([]byte, 32)
 		if _, err := rand.Read(b); err != nil {
 			log.Printf("FATAL: cannot generate JWT secret: %v", err)
-			return []byte("fallback-unsafe-key-change-me")
+			fallbackSecret = []byte("fallback-unsafe-key-change-me")
+			return
 		}
-		secret = hex.EncodeToString(b)
+		fallbackSecret = []byte(hex.EncodeToString(b))
 		log.Printf("WARNING: JWT_SECRET not set, generated random key. All tokens invalid on restart.")
-	}
-	return []byte(secret)
+	})
+
+	return fallbackSecret
 }
 
 type Claims struct {
@@ -33,11 +45,18 @@ type Claims struct {
 }
 
 func GenerateToken(accountID uint, username string) (string, error) {
+	tokenIDBytes := make([]byte, 16)
+	if _, err := rand.Read(tokenIDBytes); err != nil {
+		return "", err
+	}
+
 	// 设置token的声明信息
 	claims := Claims{
 		AccountID: accountID,
 		Username:  username,
 		RegisteredClaims: jwt.RegisteredClaims{
+			// 保证同一用户连续登录时也会生成不同 token，使旧 token 能被服务端撤销。
+			ID: hex.EncodeToString(tokenIDBytes),
 			// 设置2小时后过期
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(2 * time.Hour)),
 

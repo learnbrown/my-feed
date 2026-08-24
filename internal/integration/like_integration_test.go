@@ -8,7 +8,12 @@ import (
 	"testing"
 )
 
-func TestLikeIdempotentWithDB(t *testing.T) {
+type likeResult struct {
+	count uint
+	err   error
+}
+
+func TestLikeAndUnlikeIdempotentWithDB(t *testing.T) {
 	sqlDB := dbtest.SetupTestDB(t)
 	dbtest.CleanTestDB(t, sqlDB)
 
@@ -41,9 +46,10 @@ func TestLikeIdempotentWithDB(t *testing.T) {
 	}
 
 	likeRepo := like.NewLikeRepo(sqlDB)
-	likeService := like.NewLikeService(likeRepo, nil)
+	cacheRecorder := &detailCacheRecorder{}
+	likeService := like.NewLikeService(likeRepo, cacheRecorder)
 
-	likesCount, err := likeService.Like(nil, liker.ID, v.ID)
+	likesCount, err := likeService.Like(t.Context(), liker.ID, v.ID)
 	if err != nil {
 		t.Fatalf("first like failed: %v", err)
 	}
@@ -51,7 +57,7 @@ func TestLikeIdempotentWithDB(t *testing.T) {
 		t.Fatalf("first like expected likes_count 1, got %d", likesCount)
 	}
 
-	likesCount, err = likeService.Like(nil, liker.ID, v.ID)
+	likesCount, err = likeService.Like(t.Context(), liker.ID, v.ID)
 	if err != nil {
 		t.Fatalf("second like failed: %v", err)
 	}
@@ -76,6 +82,44 @@ func TestLikeIdempotentWithDB(t *testing.T) {
 
 	if gotVideo.LikesCount != 1 {
 		t.Fatalf("expected video.likes_count 1, got %d", gotVideo.LikesCount)
+	}
+	if len(cacheRecorder.deletedVideoIDs) != 1 || cacheRecorder.deletedVideoIDs[0] != v.ID {
+		t.Fatalf("cache deletions after idempotent likes = %v, want [%d]", cacheRecorder.deletedVideoIDs, v.ID)
+	}
+
+	likesCount, err = likeService.Unlike(t.Context(), liker.ID, v.ID)
+	if err != nil {
+		t.Fatalf("first unlike failed: %v", err)
+	}
+	if likesCount != 0 {
+		t.Fatalf("first unlike expected likes_count 0, got %d", likesCount)
+	}
+
+	likesCount, err = likeService.Unlike(t.Context(), liker.ID, v.ID)
+	if err != nil {
+		t.Fatalf("second unlike failed: %v", err)
+	}
+	if likesCount != 0 {
+		t.Fatalf("second unlike expected likes_count still 0, got %d", likesCount)
+	}
+
+	if err := sqlDB.Model(&like.Like{}).
+		Where("account_id = ? AND video_id = ?", liker.ID, v.ID).
+		Count(&likeRows).Error; err != nil {
+		t.Fatalf("count likes after unlike: %v", err)
+	}
+	if likeRows != 0 {
+		t.Fatalf("expected no like rows after unlike, got %d", likeRows)
+	}
+
+	if err := sqlDB.First(&gotVideo, v.ID).Error; err != nil {
+		t.Fatalf("failed to reload video: %v", err)
+	}
+	if gotVideo.LikesCount != 0 {
+		t.Fatalf("expected video.likes_count 0 after unlike, got %d", gotVideo.LikesCount)
+	}
+	if len(cacheRecorder.deletedVideoIDs) != 2 || cacheRecorder.deletedVideoIDs[1] != v.ID {
+		t.Fatalf("cache deletions after idempotent unlikes = %v, want [%d %d]", cacheRecorder.deletedVideoIDs, v.ID, v.ID)
 	}
 }
 
@@ -121,24 +165,22 @@ func TestLikeConcurrentIdempotent(t *testing.T) {
 
 	concurrency := 20
 
-	cntChan := make(chan uint, concurrency)
-	errChan := make(chan error, concurrency)
+	results := make(chan likeResult, concurrency)
+	ctx := t.Context()
 	for i := 0; i < concurrency; i++ {
 		go func() {
-			cnt, err := likeService.Like(nil, liker.ID, v.ID)
-			cntChan <- cnt
-			errChan <- err
+			cnt, err := likeService.Like(ctx, liker.ID, v.ID)
+			results <- likeResult{count: cnt, err: err}
 		}()
 	}
 
-	var errCount int
 	for i := 0; i < concurrency; i++ {
-		if err := <-errChan; err != nil {
-			errCount++
-			t.Logf("concurrent like got error: %v", err)
+		result := <-results
+		if result.err != nil {
+			t.Errorf("concurrent like returned error: %v", result.err)
 		}
-		if cnt := <-cntChan; cnt != 1 {
-			t.Logf("expected likes_count 1, got:%d", cnt)
+		if result.count != 1 {
+			t.Errorf("expected likes_count 1, got %d", result.count)
 		}
 	}
 
@@ -159,5 +201,37 @@ func TestLikeConcurrentIdempotent(t *testing.T) {
 
 	if gotVideo.LikesCount != 1 {
 		t.Fatalf("expected video.likes_count 1, got %d", gotVideo.LikesCount)
+	}
+
+	results = make(chan likeResult, concurrency)
+	for i := 0; i < concurrency; i++ {
+		go func() {
+			cnt, err := likeService.Unlike(ctx, liker.ID, v.ID)
+			results <- likeResult{count: cnt, err: err}
+		}()
+	}
+	for i := 0; i < concurrency; i++ {
+		result := <-results
+		if result.err != nil {
+			t.Errorf("concurrent unlike returned error: %v", result.err)
+		}
+		if result.count != 0 {
+			t.Errorf("expected likes_count 0, got %d", result.count)
+		}
+	}
+
+	if err := sqlDB.Model(&like.Like{}).
+		Where("account_id = ? AND video_id = ?", liker.ID, v.ID).
+		Count(&likeRows).Error; err != nil {
+		t.Fatalf("count likes after concurrent unlike: %v", err)
+	}
+	if likeRows != 0 {
+		t.Fatalf("expected no like rows after concurrent unlike, got %d", likeRows)
+	}
+	if err := sqlDB.First(&gotVideo, v.ID).Error; err != nil {
+		t.Fatalf("failed to reload video after concurrent unlike: %v", err)
+	}
+	if gotVideo.LikesCount != 0 {
+		t.Fatalf("expected video.likes_count 0 after concurrent unlike, got %d", gotVideo.LikesCount)
 	}
 }

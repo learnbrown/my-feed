@@ -59,6 +59,10 @@ func (repo *LikeRepo) DeleteLike(accountID, videoID uint) (deleted bool, err err
 	return res.RowsAffected > 0, res.Error
 }
 
+func (repo *LikeRepo) GetVideoLikesCount(videoID uint) (uint, error) {
+	return video.NewVideoRepo(repo.db).GetLikesCount(videoID)
+}
+
 // 返回点赞过的视频列表
 // [x] 应该按 likes.created_at desc 排序
 // [x] 返回值中不包含likes.created_at，无法获得next_time -> 定义新结构来保存点赞时间

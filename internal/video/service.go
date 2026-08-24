@@ -20,18 +20,20 @@ import (
 )
 
 type VideoService struct {
-	repo  *VideoRepo
-	cache DetailCache
+	repo       *VideoRepo
+	cache      DetailCache
+	uploadRoot string
 }
 
 func NewVideoService(repo *VideoRepo, cache DetailCache) *VideoService {
-	return &VideoService{repo: repo, cache: cache}
+	return &VideoService{repo: repo, cache: cache, uploadRoot: defaultUploadRoot}
 }
 
 const (
-	maxVideoSize    int64  = 200 << 20 // 视频最大字节数
-	maxCoverSize    int64  = 5 << 20   // 封面最大字节数
-	defaultCoverURL string = "/static/uploads/covers/default.png"
+	maxVideoSize      int64  = 200 << 20 // 视频最大字节数
+	maxCoverSize      int64  = 5 << 20   // 封面最大字节数
+	defaultCoverURL   string = "/static/uploads/covers/default.png"
+	defaultUploadRoot        = ".run/uploads"
 
 	// 用于saveFile区分视频与封面
 	videoType string = "videos"
@@ -330,7 +332,7 @@ func (service *VideoService) saveFile(authorID uint, fileType string, file *mult
 	// 本地文件路径 .run/uploads/<fileType>/<authorID>/<yyyyMMdd>/<uniqueName><ext>
 	dateDir := time.Now().Format("20060102")
 
-	uploadDir := filepath.Join(".run", "uploads", fileType, fmt.Sprintf("%d", authorID), dateDir)
+	uploadDir := filepath.Join(service.uploadRootPath(), fileType, fmt.Sprintf("%d", authorID), dateDir)
 
 	err := os.MkdirAll(uploadDir, 0755)
 	if err != nil {
@@ -374,4 +376,11 @@ func (service *VideoService) saveFile(authorID uint, fileType string, file *mult
 	returnDir := fmt.Sprintf("/static/uploads/%s/%d/%s/%s", fileType, authorID, dateDir, fileName)
 
 	return returnDir, nil
+}
+
+func (service *VideoService) uploadRootPath() string {
+	if service.uploadRoot == "" {
+		return defaultUploadRoot
+	}
+	return service.uploadRoot
 }

@@ -2,6 +2,7 @@ package dbtest
 
 import (
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -20,7 +21,7 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 
 	cfg := config.DatabaseConfig{
 		Host:     getenv("MYSQL_HOST", "localhost"),
-		Port:     3306,
+		Port:     getenvInt(t, "MYSQL_PORT", 3306),
 		User:     getenv("MYSQL_USER", "dev_user"),
 		Password: getenv("MYSQL_PASSWORD", "qwerdf"),
 		DBName:   getenv("MYSQL_DBNAME", "myfeed_test"),
@@ -44,6 +45,9 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 		if err == nil {
 			_ = sqlDB2.Close()
 		}
+	})
+	t.Cleanup(func() {
+		CleanTestDB(t, sqlDB)
 	})
 
 	return sqlDB
@@ -83,4 +87,19 @@ func getenv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func getenvInt(t *testing.T, key string, fallback int) int {
+	t.Helper()
+
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+
+	value, err := strconv.Atoi(v)
+	if err != nil {
+		t.Fatalf("invalid %s %q: %v", key, v, err)
+	}
+	return value
 }

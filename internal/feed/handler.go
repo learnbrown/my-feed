@@ -38,6 +38,7 @@ func (handler *FeedHandler) ListLatest(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": ErrInvalidCursor.Error(),
 		})
+		return
 	}
 
 	// int64转化为毫秒时间戳
@@ -85,6 +86,7 @@ func (handler *FeedHandler) ListByTag(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": ErrInvalidCursor.Error(),
 		})
+		return
 	}
 
 	var latestTime time.Time

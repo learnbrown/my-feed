@@ -52,13 +52,9 @@ func (service *LikeService) Like(ctx context.Context, accountID, videoID uint) (
 		// 创建点赞记录
 		err = likeRepo.CreateLike(accountID, videoID)
 		if err != nil {
-			// 唯一索引冲突，查询likes_count并返回成功
+			// 唯一索引冲突按幂等成功处理。计数要在事务提交后查询，
+			// 避免并发事务的快照读返回旧值。
 			if dberr.IsDuplicateKeyError(err) {
-				cnt, err := videoRepo.GetLikesCount(videoID)
-				if err != nil {
-					return err
-				}
-				likes = cnt
 				return nil
 			}
 			return err
@@ -73,19 +69,20 @@ func (service *LikeService) Like(ctx context.Context, accountID, videoID uint) (
 			return err
 		}
 
-		// 获取点赞数
-		cnt, err := videoRepo.GetLikesCount(videoID)
-		if err != nil {
-			return err
-		}
-		likes = cnt
-
 		changed = true
 
 		return nil
 	})
 
 	if err != nil {
+		return 0, err
+	}
+
+	likes, err = service.repo.GetVideoLikesCount(videoID)
+	if err != nil {
+		if errors.Is(err, dberr.ErrRecordNotFound) {
+			return 0, ErrVideoNotFound
+		}
 		return 0, err
 	}
 
@@ -135,11 +132,6 @@ func (service *LikeService) Unlike(ctx context.Context, accountID, videoID uint)
 			return err
 		}
 		if !deleted {
-			cnt, err := videoRepo.GetLikesCount(videoID)
-			if err != nil {
-				return err
-			}
-			likes = cnt
 			return nil
 		}
 
@@ -152,19 +144,20 @@ func (service *LikeService) Unlike(ctx context.Context, accountID, videoID uint)
 			return err
 		}
 
-		// 获取点赞数
-		cnt, err := videoRepo.GetLikesCount(videoID)
-		if err != nil {
-			return err
-		}
-
-		likes = cnt
 		changed = true
 
 		return nil
 	})
 
 	if err != nil {
+		return 0, err
+	}
+
+	likes, err = service.repo.GetVideoLikesCount(videoID)
+	if err != nil {
+		if errors.Is(err, dberr.ErrRecordNotFound) {
+			return 0, ErrVideoNotFound
+		}
 		return 0, err
 	}
 

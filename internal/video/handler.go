@@ -131,6 +131,7 @@ func (handler *VideoHandler) ListByAuthorID(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": ErrInvalidCursor.Error(),
 		})
+		return
 	}
 
 	var latestTime time.Time

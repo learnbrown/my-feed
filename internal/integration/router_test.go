@@ -12,6 +12,7 @@ func setupTestRouter(t *testing.T) *gin.Engine {
 	t.Helper()
 
 	gin.SetMode(gin.TestMode)
+	t.Setenv("JWT_SECRET", "my-feed-integration-test-secret")
 
 	sqlDB := dbtest.SetupTestDB(t)
 	dbtest.CleanTestDB(t, sqlDB)

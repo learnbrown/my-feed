@@ -18,6 +18,9 @@ type Client struct {
 const defaultPrefix = "myfeed"
 
 func NewRedis(cfg *config.RedisConfig) (*Client, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("redis config required")
+	}
 	if !cfg.Enabled {
 		return nil, fmt.Errorf("config disabled redis")
 	}
