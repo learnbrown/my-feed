@@ -22,6 +22,7 @@ V2.0 可选微服务拆分
 - `实现指导.md`：本项目阶段性实现路线，当前正在推进 V1.0。
 - `doc/*.md`：当前项目 API 文档。
 - `doc/09 token缓存折中改造方案.md`：当前 token 缓存收口的具体设计和验收标准。
+- `doc/10 用户主页缓存实现方案.md`：用户主页 60 秒 Cache Aside 和主动失效的轻量实现设计。
 
 ## 协作角色
 
@@ -127,7 +128,8 @@ V0.3 的核心训练点已经覆盖：
 - JWT token 缓存：Redis hit、miss 回源 MySQL、成功后回填。
 - 视频详情 Cache Aside，TTL 为 5 分钟。
 - 点赞、取消点赞、评论发布和评论删除后的详情缓存失效。
-- Redis key、token cache、detail cache、JWT middleware 等测试。
+- 用户主页 60 秒 Cache Aside，以及 follow/unfollow、like/unlike、publish 的主动失效。
+- Redis key、token cache、detail cache、profile cache、JWT middleware 等测试。
 - 第一批 service、handler 和 MySQL 集成测试；MySQL 测试需要 `RUN_MYSQL_TESTS=1` 显式启用。
 
 本轮已收口：
@@ -140,10 +142,10 @@ V0.3 的核心训练点已经覆盖：
 
 当前待继续：
 
-- 尚未实现用户主页缓存、Feed ZSET、热榜和限流。
+- Feed ZSET、热榜和限流尚未实现。
 - 尚未建立 Bruno 主链路、批量测试数据和 Redis 前后压测基线。
 
-下一个功能目标是用户主页 60 秒 Cache Aside 和主动失效。
+下一个编码目标是 Feed 最新流 ZSET；用户主页缓存的实现和验收结果见 `doc/10 用户主页缓存实现方案.md`。
 
 ## 当前模块结构
 
@@ -407,7 +409,7 @@ Cache Aside
 
 当前点赞、取消点赞、评论发布和评论删除已经采用删除详情缓存的策略。Redis miss、读取失败或写入失败不会阻断视频详情的 MySQL 返回。
 
-#### 4. 用户主页聚合缓存，下一项功能目标
+#### 4. 用户主页聚合缓存，已完成 MVP
 
 `getProfile` 会聚合多张表：
 
@@ -428,8 +430,10 @@ V1.0 可以把主页结果缓存短 TTL，例如 30 秒到 120 秒。
 - 发布/删除视频会影响作品数。
 - 第一版使用 60 秒 TTL；Redis miss 或异常时回源 MySQL，缓存写失败不影响响应。
 - 第一版即补主动删除：关注/取关删除双方主页缓存，点赞/取消点赞删除视频作者主页缓存，发布视频删除作者主页缓存。
-- 如果主动删除失败，业务写入仍以 MySQL 事务结果为准，依靠 60 秒 TTL 收敛旧数据，同时记录日志和指标。
+- 如果主动删除失败，业务写入仍以 MySQL 事务结果为准，依靠 60 秒 TTL 收敛旧数据，同时记录异常日志。
 - 评论不会改变当前主页统计，不需要删除主页缓存。
+
+当前确定不引入 singleflight、分布式锁、延迟双删、MQ、缓存预热和空值缓存；接受极端并发下由 60 秒 TTL 收敛的短暂旧数据。详细代码结构、日志和验收标准见 `doc/10 用户主页缓存实现方案.md`。
 
 #### 5. Feed 最新流缓存
 
@@ -563,10 +567,9 @@ go run ./cmd
 当前下一步建议：
 
 ```text
-先按 doc/09 的折中方案收口 JWT token 缓存
-再做 profile 的 60 秒 Cache Aside 和主动失效
-然后做 Feed ZSET
-最后做热榜和限流
+做 Feed 最新流 ZSET
+然后做热榜 ZSET
+最后做基础限流
 ```
 
 严厉一点说：V1.0 开始后，每加一个 Redis key，都必须能回答三个问题：

@@ -168,6 +168,7 @@ DTO：服务于接口入参/出参
 - JWT token 缓存：Redis hit 校验，miss 或读取异常回源 MySQL，成功后回填。
 - 视频详情 Cache Aside，TTL 为 5 分钟。
 - 点赞、取消点赞、发布评论、删除评论后删除视频详情缓存。
+- 用户主页 60 秒 Cache Aside；关注、取关、点赞、取消点赞和发布视频后主动删除受影响的主页缓存。
 - service/handler 单元测试、miniredis 测试和需要显式启用的 MySQL 集成测试。
 
 本轮 token 缓存收口已完成：
@@ -185,11 +186,12 @@ DTO：服务于接口入参/出参
 下一步：
 
 ```text
-用户主页聚合 Cache Aside
-  -> Feed 最新流 ZSET
+Feed 最新流 ZSET
   -> 热榜 ZSET
   -> 基础限流
 ```
+
+用户主页缓存采用适合当前个人项目的轻量方案：缓存现有 Profile DTO，固定 TTL 60 秒，Redis 异常回源 MySQL；关注、点赞和发布成功后主动删除受影响的主页缓存。实现和验收结果见 `doc/10 用户主页缓存实现方案.md`。
 
 MySQL 仍是 token 最终数据源。当前实现采用有界最终一致性：正常登录/登出主动更新或删除 Redis，Redis 失败时业务仍由 MySQL 完成，旧缓存异常窗口最多 5 分钟。当前只在本地开发，继续使用现有 token key，具体见 `doc/09 token缓存折中改造方案.md`。
 

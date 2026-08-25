@@ -38,6 +38,16 @@ func (recorder *detailCacheRecorder) DelDetail(_ context.Context, videoID uint) 
 	return nil
 }
 
+type profileCacheRecorder struct {
+	deletedAccountIDs []uint
+	err               error
+}
+
+func (recorder *profileCacheRecorder) DelProfile(_ context.Context, accountID uint) error {
+	recorder.deletedAccountIDs = append(recorder.deletedAccountIDs, accountID)
+	return recorder.err
+}
+
 func createTestAccount(t *testing.T, sqlDB *gorm.DB, username string) account.Account {
 	t.Helper()
 

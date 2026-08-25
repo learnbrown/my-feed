@@ -81,7 +81,7 @@ func (handler *FollowHandler) Follow(c *gin.Context) {
 		return
 	}
 
-	err = handler.service.Follow(followerID, input.VloggerID)
+	err = handler.service.Follow(c.Request.Context(), followerID, input.VloggerID)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrFollowerRequired):
@@ -131,7 +131,7 @@ func (handler *FollowHandler) Unfollow(c *gin.Context) {
 		return
 	}
 
-	err = handler.service.Unfollow(followerID, input.VloggerID)
+	err = handler.service.Unfollow(c.Request.Context(), followerID, input.VloggerID)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrFollowerRequired):

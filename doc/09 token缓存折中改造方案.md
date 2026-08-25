@@ -234,5 +234,6 @@ handler 的 `500` 错误输出放到后续独立收口：在 HTTP 边界只记�
 3. `[已完成]` 调整 JWTAuth mismatch 回源和短 TTL 回填。
 4. `[已完成]` 删除高频成功日志，统一 Redis 异常日志。
 5. `[已完成]` 补 service、middleware 和 miniredis 测试，默认 `go test ./...` 通过。
-6. `[下一项]` 用户主页 60 秒 Cache Aside 和主动失效。
+6. `[已完成]` 按 `doc/10 用户主页缓存实现方案.md` 实现并验收用户主页 60 秒 Cache Aside 和主动失效。
+7. `[下一项]` Feed 最新流 ZSET。
 ```

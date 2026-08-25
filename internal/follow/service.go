@@ -1,8 +1,11 @@
 package follow
 
 import (
+	"context"
 	"errors"
+	"log"
 	"my_feed/internal/account"
+	"my_feed/internal/cache"
 	"my_feed/internal/dberr"
 	"time"
 )
@@ -33,12 +36,17 @@ type FollowListDTO struct {
 }
 
 type FollowService struct {
-	followRepo  *FollowRepo
-	accountRepo *account.AccountRepo
+	followRepo   *FollowRepo
+	accountRepo  *account.AccountRepo
+	profileCache ProfileCacheInvalidator
 }
 
-func NewFollowService(followRepo *FollowRepo, accountRepo *account.AccountRepo) *FollowService {
-	return &FollowService{followRepo: followRepo, accountRepo: accountRepo}
+type ProfileCacheInvalidator interface {
+	DelProfile(ctx context.Context, accountID uint) error
+}
+
+func NewFollowService(followRepo *FollowRepo, accountRepo *account.AccountRepo, profileCache ProfileCacheInvalidator) *FollowService {
+	return &FollowService{followRepo: followRepo, accountRepo: accountRepo, profileCache: profileCache}
 }
 
 func (service *FollowService) IsFollowing(followerID, vloggerID uint) (bool, error) {
@@ -57,7 +65,7 @@ func (service *FollowService) IsFollowing(followerID, vloggerID uint) (bool, err
 	return service.followRepo.ExistsFollow(followerID, vloggerID)
 }
 
-func (service *FollowService) Follow(followerID, vloggerID uint) error {
+func (service *FollowService) Follow(ctx context.Context, followerID, vloggerID uint) error {
 	if followerID == 0 {
 		return ErrFollowerRequired
 	}
@@ -79,14 +87,15 @@ func (service *FollowService) Follow(followerID, vloggerID uint) error {
 	}
 
 	err = service.followRepo.CreateFollow(followerID, vloggerID)
-	if err == nil || dberr.IsDuplicateKeyError(err) {
-		return nil
+	if err != nil && !dberr.IsDuplicateKeyError(err) {
+		return err
 	}
 
-	return err
+	service.invalidateProfiles(ctx, followerID, vloggerID)
+	return nil
 }
 
-func (service *FollowService) Unfollow(followerID, vloggerID uint) error {
+func (service *FollowService) Unfollow(ctx context.Context, followerID, vloggerID uint) error {
 	if followerID == 0 {
 		return ErrFollowerRequired
 	}
@@ -103,7 +112,23 @@ func (service *FollowService) Unfollow(followerID, vloggerID uint) error {
 		return err
 	}
 
+	service.invalidateProfiles(ctx, followerID, vloggerID)
 	return nil
+}
+
+func (service *FollowService) invalidateProfiles(ctx context.Context, accountIDs ...uint) {
+	if service.profileCache == nil {
+		return
+	}
+
+	for _, accountID := range accountIDs {
+		delCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+		err := service.profileCache.DelProfile(delCtx, accountID)
+		cancel()
+		if err != nil && !errors.Is(err, cache.ErrDisabled) {
+			log.Printf("level=WARN component=profile_cache operation=delete account_id=%d err=%q", accountID, err)
+		}
+	}
 }
 
 // listFollower/listFollowing 返回类型

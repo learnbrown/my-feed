@@ -64,7 +64,7 @@ func testVideoFeedPagination(t *testing.T, sqlDB *gorm.DB) {
 	}
 
 	videoRepo := video.NewVideoRepo(sqlDB)
-	videoService := video.NewVideoService(videoRepo, nil)
+	videoService := video.NewVideoService(videoRepo, nil, nil)
 	feedService := feed.NewFeedService(videoRepo)
 	want := reverseUintIDs(visibleIDs)
 
@@ -131,7 +131,7 @@ func testLikedVideoPagination(t *testing.T, sqlDB *gorm.DB) {
 	for _, relationID := range reverseUintIDs(relationIDs) {
 		want = append(want, videoByRelation[relationID])
 	}
-	service := like.NewLikeService(like.NewLikeRepo(sqlDB), nil)
+	service := like.NewLikeService(like.NewLikeRepo(sqlDB), nil, nil)
 	var got []uint
 	var latestTime time.Time
 	var latestID uint
@@ -219,7 +219,7 @@ func testFollowPagination(t *testing.T, sqlDB *gorm.DB) {
 		followingByRelation[followingRelation.ID] = vlogger.ID
 	}
 
-	service := follow.NewFollowService(follow.NewFollowRepo(sqlDB), accountRepo(sqlDB))
+	service := follow.NewFollowService(follow.NewFollowRepo(sqlDB), accountRepo(sqlDB), nil)
 	followerIDs := collectFollowPages(t, func(latestTime time.Time, latestID uint) (*follow.ListFollowResponse, error) {
 		return service.ListFollower(owner.ID, 2, latestTime, latestID)
 	})

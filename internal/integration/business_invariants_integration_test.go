@@ -2,6 +2,7 @@ package integration
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -69,26 +70,41 @@ func TestFollowIsIdempotentWithDB(t *testing.T) {
 
 	follower := createTestAccount(t, sqlDB, "follow-idempotent-follower")
 	vlogger := createTestAccount(t, sqlDB, "follow-idempotent-vlogger")
-	service := follow.NewFollowService(follow.NewFollowRepo(sqlDB), account.NewAccountRepo(sqlDB))
+	profileRecorder := &profileCacheRecorder{}
+	service := follow.NewFollowService(follow.NewFollowRepo(sqlDB), account.NewAccountRepo(sqlDB), profileRecorder)
 
-	if err := service.Follow(follower.ID, vlogger.ID); err != nil {
+	if err := service.Follow(t.Context(), follower.ID, vlogger.ID); err != nil {
 		t.Fatalf("first Follow() error = %v", err)
 	}
-	if err := service.Follow(follower.ID, vlogger.ID); err != nil {
+	if err := service.Follow(t.Context(), follower.ID, vlogger.ID); err != nil {
 		t.Fatalf("second Follow() error = %v", err)
 	}
 	assertFollowRows(t, sqlDB, follower.ID, vlogger.ID, 1)
 
-	if err := service.Unfollow(follower.ID, vlogger.ID); err != nil {
+	if err := service.Unfollow(t.Context(), follower.ID, vlogger.ID); err != nil {
 		t.Fatalf("first Unfollow() error = %v", err)
 	}
-	if err := service.Unfollow(follower.ID, vlogger.ID); err != nil {
+	if err := service.Unfollow(t.Context(), follower.ID, vlogger.ID); err != nil {
 		t.Fatalf("second Unfollow() error = %v", err)
 	}
 	assertFollowRows(t, sqlDB, follower.ID, vlogger.ID, 0)
 
-	if err := service.Follow(follower.ID, vlogger.ID+10_000); !errors.Is(err, follow.ErrVloggerNotFound) {
+	if err := service.Follow(t.Context(), follower.ID, vlogger.ID+10_000); !errors.Is(err, follow.ErrVloggerNotFound) {
 		t.Fatalf("Follow() missing vlogger error = %v, want ErrVloggerNotFound", err)
+	}
+	wantDeletedAccountIDs := []uint{
+		follower.ID, vlogger.ID,
+		follower.ID, vlogger.ID,
+		follower.ID, vlogger.ID,
+		follower.ID, vlogger.ID,
+	}
+	if !reflect.DeepEqual(profileRecorder.deletedAccountIDs, wantDeletedAccountIDs) {
+		t.Fatalf("profile cache deletions = %v, want %v", profileRecorder.deletedAccountIDs, wantDeletedAccountIDs)
+	}
+
+	profileRecorder.err = errors.New("redis delete unavailable")
+	if err := service.Unfollow(t.Context(), follower.ID, vlogger.ID); err != nil {
+		t.Fatalf("idempotent Unfollow() with profile cache failure error = %v", err)
 	}
 }
 
@@ -150,8 +166,8 @@ func TestProfileAggregatesOnlyVisibleVideosWithDB(t *testing.T) {
 		t.Fatalf("create following relation: %v", err)
 	}
 
-	service := profile.NewProfileService(account.NewAccountRepo(sqlDB), video.NewVideoRepo(sqlDB), follow.NewFollowRepo(sqlDB))
-	got, err := service.GetProfile(owner.ID)
+	service := profile.NewProfileService(account.NewAccountRepo(sqlDB), video.NewVideoRepo(sqlDB), follow.NewFollowRepo(sqlDB), nil)
+	got, err := service.GetProfile(t.Context(), owner.ID)
 	if err != nil {
 		t.Fatalf("GetProfile() error = %v", err)
 	}
@@ -211,9 +227,11 @@ func TestPublishNormalizesAndDeduplicatesTagsWithDB(t *testing.T) {
 	dbtest.CleanTestDB(t, sqlDB)
 
 	author := createTestAccount(t, sqlDB, "publish-tags-author")
-	service := video.NewVideoService(video.NewVideoRepo(sqlDB), nil)
+	profileRecorder := &profileCacheRecorder{}
+	service := video.NewVideoService(video.NewVideoRepo(sqlDB), nil, profileRecorder)
 
 	first, err := service.Publish(
+		t.Context(),
 		author.ID,
 		"  Intro #Go #GO #C++  ",
 		"  #go #feed #FEED #中文_1  ",
@@ -227,7 +245,9 @@ func TestPublishNormalizesAndDeduplicatesTagsWithDB(t *testing.T) {
 		t.Fatalf("unexpected normalized video: %#v", first)
 	}
 
+	profileRecorder.err = errors.New("redis delete unavailable")
 	second, err := service.Publish(
+		t.Context(),
 		author.ID,
 		"Second #go",
 		"reuse an existing tag",
@@ -254,6 +274,9 @@ func TestPublishNormalizesAndDeduplicatesTagsWithDB(t *testing.T) {
 
 	assertVideoTagRows(t, sqlDB, first.ID, 4)
 	assertVideoTagRows(t, sqlDB, second.ID, 1)
+	if !reflect.DeepEqual(profileRecorder.deletedAccountIDs, []uint{author.ID, author.ID}) {
+		t.Fatalf("profile cache deletions after publish = %v, want [%d %d]", profileRecorder.deletedAccountIDs, author.ID, author.ID)
+	}
 }
 
 func TestConcurrentCommentsMaintainCounterWithDB(t *testing.T) {
@@ -303,7 +326,7 @@ func TestConcurrentFollowIsIdempotentWithDB(t *testing.T) {
 
 	follower := createTestAccount(t, sqlDB, "concurrent-follow-follower")
 	vlogger := createTestAccount(t, sqlDB, "concurrent-follow-vlogger")
-	service := follow.NewFollowService(follow.NewFollowRepo(sqlDB), account.NewAccountRepo(sqlDB))
+	service := follow.NewFollowService(follow.NewFollowRepo(sqlDB), account.NewAccountRepo(sqlDB), nil)
 
 	const concurrency = 20
 	start := make(chan struct{})
@@ -314,7 +337,7 @@ func TestConcurrentFollowIsIdempotentWithDB(t *testing.T) {
 		go func() {
 			ready.Done()
 			<-start
-			errorsByRequest <- service.Follow(follower.ID, vlogger.ID)
+			errorsByRequest <- service.Follow(t.Context(), follower.ID, vlogger.ID)
 		}()
 	}
 	ready.Wait()

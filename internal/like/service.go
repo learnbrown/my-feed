@@ -19,12 +19,17 @@ var (
 )
 
 type LikeService struct {
-	repo  *LikeRepo
-	cache video.DetailCache
+	repo         *LikeRepo
+	cache        video.DetailCache
+	profileCache ProfileCacheInvalidator
 }
 
-func NewLikeService(repo *LikeRepo, cache video.DetailCache) *LikeService {
-	return &LikeService{repo: repo, cache: cache}
+type ProfileCacheInvalidator interface {
+	DelProfile(ctx context.Context, accountID uint) error
+}
+
+func NewLikeService(repo *LikeRepo, cache video.DetailCache, profileCache ProfileCacheInvalidator) *LikeService {
+	return &LikeService{repo: repo, cache: cache, profileCache: profileCache}
 }
 
 func (service *LikeService) Like(ctx context.Context, accountID, videoID uint) (uint, error) {
@@ -38,16 +43,18 @@ func (service *LikeService) Like(ctx context.Context, accountID, videoID uint) (
 	var likes uint
 	// 记录是否点赞记录是否变化了
 	changed := false
+	var authorID uint
 
 	err := service.repo.Transaction(func(likeRepo *LikeRepo, videoRepo *video.VideoRepo) error {
 		// 查询视频是否存在
-		_, err := videoRepo.FindVideoByID(videoID)
+		targetVideo, err := videoRepo.FindVideoByID(videoID)
 		if err != nil {
 			if errors.Is(err, dberr.ErrRecordNotFound) {
 				return ErrVideoNotFound
 			}
 			return err
 		}
+		authorID = targetVideo.AuthorID
 
 		// 创建点赞记录
 		err = likeRepo.CreateLike(accountID, videoID)
@@ -78,24 +85,17 @@ func (service *LikeService) Like(ctx context.Context, accountID, videoID uint) (
 		return 0, err
 	}
 
+	if changed {
+		service.invalidateDetail(ctx, videoID)
+	}
+	service.invalidateProfile(ctx, authorID)
+
 	likes, err = service.repo.GetVideoLikesCount(videoID)
 	if err != nil {
 		if errors.Is(err, dberr.ErrRecordNotFound) {
 			return 0, ErrVideoNotFound
 		}
 		return 0, err
-	}
-
-	if changed {
-		// 删除detail缓存
-		if service.cache != nil {
-			delCtx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-			defer cancel()
-			err = service.cache.DelDetail(delCtx, videoID)
-			if err != nil && !errors.Is(err, cache.ErrDisabled) {
-				log.Printf("level=WARN component=video_detail_cache operation=delete video_id=%d err=%q", videoID, err)
-			}
-		}
 	}
 
 	return likes, nil
@@ -111,16 +111,18 @@ func (service *LikeService) Unlike(ctx context.Context, accountID, videoID uint)
 
 	var likes uint
 	changed := false
+	var authorID uint
 
 	err := service.repo.Transaction(func(likeRepo *LikeRepo, videoRepo *video.VideoRepo) error {
 		// 查看视频是否存在
-		_, err := videoRepo.FindVideoByID(videoID)
+		targetVideo, err := videoRepo.FindVideoByID(videoID)
 		if err != nil {
 			if errors.Is(err, dberr.ErrRecordNotFound) {
 				return ErrVideoNotFound
 			}
 			return err
 		}
+		authorID = targetVideo.AuthorID
 
 		// 删除点赞记录
 		deleted, err := likeRepo.DeleteLike(accountID, videoID)
@@ -149,6 +151,11 @@ func (service *LikeService) Unlike(ctx context.Context, accountID, videoID uint)
 		return 0, err
 	}
 
+	if changed {
+		service.invalidateDetail(ctx, videoID)
+	}
+	service.invalidateProfile(ctx, authorID)
+
 	likes, err = service.repo.GetVideoLikesCount(videoID)
 	if err != nil {
 		if errors.Is(err, dberr.ErrRecordNotFound) {
@@ -157,18 +164,33 @@ func (service *LikeService) Unlike(ctx context.Context, accountID, videoID uint)
 		return 0, err
 	}
 
-	if changed {
-		// 删除detail缓存
-		if service.cache != nil {
-			delCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
-			defer cancel()
-			err = service.cache.DelDetail(delCtx, videoID)
-			if err != nil && !errors.Is(err, cache.ErrDisabled) {
-				log.Printf("level=WARN component=video_detail_cache operation=delete video_id=%d err=%q", videoID, err)
-			}
-		}
-	}
 	return likes, nil
+}
+
+func (service *LikeService) invalidateDetail(ctx context.Context, videoID uint) {
+	if service.cache == nil {
+		return
+	}
+
+	delCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	err := service.cache.DelDetail(delCtx, videoID)
+	cancel()
+	if err != nil && !errors.Is(err, cache.ErrDisabled) {
+		log.Printf("level=WARN component=video_detail_cache operation=delete video_id=%d err=%q", videoID, err)
+	}
+}
+
+func (service *LikeService) invalidateProfile(ctx context.Context, accountID uint) {
+	if service.profileCache == nil {
+		return
+	}
+
+	delCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	err := service.profileCache.DelProfile(delCtx, accountID)
+	cancel()
+	if err != nil && !errors.Is(err, cache.ErrDisabled) {
+		log.Printf("level=WARN component=profile_cache operation=delete account_id=%d err=%q", accountID, err)
+	}
 }
 
 // ListLikedVideos repo层返回格式

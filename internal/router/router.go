@@ -30,6 +30,7 @@ func SetRouter(sqlDB *gorm.DB, rediscache *cache.Client) (router *gin.Engine) {
 	accountRouter := router.Group("/account")
 	accountRepo := account.NewAccountRepo(sqlDB)
 	accountCache := account.NewRedisTokenCache(rediscache)
+	profileCache := profile.NewRedisProfileCache(rediscache)
 	accountService := account.NewAccountService(accountRepo, accountCache)
 	accountHandler := account.NewAccountHandler(accountService)
 	{
@@ -50,7 +51,7 @@ func SetRouter(sqlDB *gorm.DB, rediscache *cache.Client) (router *gin.Engine) {
 	videoRouter := router.Group("/video")
 	videoRepo := video.NewVideoRepo(sqlDB)
 	videoCache := video.NewRedisDetailCache(rediscache)
-	videoService := video.NewVideoService(videoRepo, videoCache)
+	videoService := video.NewVideoService(videoRepo, videoCache, profileCache)
 	videoHandler := video.NewVideoHandler(videoService)
 	{
 		videoRouter.POST("/getDetail", videoHandler.GetDetail)
@@ -76,7 +77,7 @@ func SetRouter(sqlDB *gorm.DB, rediscache *cache.Client) (router *gin.Engine) {
 	likeRouter := router.Group("/like")
 	likeRouter.Use(jwt.JWTAuth(accountRepo, accountCache))
 	likeRepo := like.NewLikeRepo(sqlDB)
-	likeService := like.NewLikeService(likeRepo, videoCache)
+	likeService := like.NewLikeService(likeRepo, videoCache, profileCache)
 	likeHandler := like.NewLikeHandler(likeService)
 	{
 		likeRouter.POST("/like", likeHandler.Like)
@@ -102,7 +103,7 @@ func SetRouter(sqlDB *gorm.DB, rediscache *cache.Client) (router *gin.Engine) {
 
 	followRouter := router.Group("/follow")
 	followRepo := follow.NewFollowRepo(sqlDB)
-	followService := follow.NewFollowService(followRepo, accountRepo)
+	followService := follow.NewFollowService(followRepo, accountRepo, profileCache)
 	followHandler := follow.NewFollowHandler(followService)
 	{
 		followRouter.POST("/listFollower", followHandler.ListFollower)
@@ -127,7 +128,7 @@ func SetRouter(sqlDB *gorm.DB, rediscache *cache.Client) (router *gin.Engine) {
 		messageRouter.POST("/listConversation", messageHandler.ListConversation)
 	}
 
-	profileService := profile.NewProfileService(accountRepo, videoRepo, followRepo)
+	profileService := profile.NewProfileService(accountRepo, videoRepo, followRepo, profileCache)
 	profileHandler := profile.NewProfileHandler(profileService)
 	accountRouter.POST("/getProfile", profileHandler.GetProfile)
 

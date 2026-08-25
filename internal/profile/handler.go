@@ -30,7 +30,7 @@ func (handler *ProfileHandler) GetProfile(c *gin.Context) {
 		return
 	}
 
-	profile, err := handler.service.GetProfile(input.AccountID)
+	profile, err := handler.service.GetProfile(c.Request.Context(), input.AccountID)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrAccountRequired):

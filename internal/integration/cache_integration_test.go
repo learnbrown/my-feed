@@ -19,7 +19,7 @@ func TestVideoDetailCacheAsideWithDB(t *testing.T) {
 
 	t.Run("miss reads database and fills cache", func(t *testing.T) {
 		cacheRecorder := &detailCacheRecorder{}
-		service := video.NewVideoService(repo, cacheRecorder)
+		service := video.NewVideoService(repo, cacheRecorder, nil)
 
 		got, err := service.GetDetail(t.Context(), v.ID)
 		if err != nil {
@@ -35,7 +35,7 @@ func TestVideoDetailCacheAsideWithDB(t *testing.T) {
 
 	t.Run("cache failure degrades to database", func(t *testing.T) {
 		cacheRecorder := &detailCacheRecorder{getErr: errors.New("redis unavailable")}
-		service := video.NewVideoService(repo, cacheRecorder)
+		service := video.NewVideoService(repo, cacheRecorder, nil)
 
 		got, err := service.GetDetail(t.Context(), v.ID)
 		if err != nil {
@@ -49,7 +49,7 @@ func TestVideoDetailCacheAsideWithDB(t *testing.T) {
 	t.Run("hit bypasses database result", func(t *testing.T) {
 		cached := video.VideoDTO{ID: v.ID, Title: "cached-title"}
 		cacheRecorder := &detailCacheRecorder{getDetail: cached, getHit: true}
-		service := video.NewVideoService(repo, cacheRecorder)
+		service := video.NewVideoService(repo, cacheRecorder, nil)
 
 		got, err := service.GetDetail(t.Context(), v.ID)
 		if err != nil {

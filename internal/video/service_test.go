@@ -45,7 +45,7 @@ func TestPublishValidation(t *testing.T) {
 	service := &VideoService{}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := service.Publish(tt.authorID, tt.title, "description", tt.playURL, tt.coverURL)
+			_, err := service.Publish(t.Context(), tt.authorID, tt.title, "description", tt.playURL, tt.coverURL)
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("Publish() error = %v, want %v", err, tt.wantErr)
 			}
@@ -133,7 +133,7 @@ func TestToDTO(t *testing.T) {
 
 func TestGetDetailReturnsCacheHitWithoutRepository(t *testing.T) {
 	want := VideoDTO{ID: 9, Title: "cached"}
-	service := NewVideoService(nil, &detailCacheStub{detail: want, hit: true})
+	service := NewVideoService(nil, &detailCacheStub{detail: want, hit: true}, nil)
 
 	got, err := service.GetDetail(t.Context(), want.ID)
 	if err != nil {

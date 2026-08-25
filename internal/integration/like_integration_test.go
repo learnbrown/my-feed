@@ -1,10 +1,12 @@
 package integration
 
 import (
+	"errors"
 	"my_feed/internal/account"
 	dbtest "my_feed/internal/db/testutil"
 	"my_feed/internal/like"
 	"my_feed/internal/video"
+	"reflect"
 	"testing"
 )
 
@@ -47,7 +49,8 @@ func TestLikeAndUnlikeIdempotentWithDB(t *testing.T) {
 
 	likeRepo := like.NewLikeRepo(sqlDB)
 	cacheRecorder := &detailCacheRecorder{}
-	likeService := like.NewLikeService(likeRepo, cacheRecorder)
+	profileRecorder := &profileCacheRecorder{}
+	likeService := like.NewLikeService(likeRepo, cacheRecorder, profileRecorder)
 
 	likesCount, err := likeService.Like(t.Context(), liker.ID, v.ID)
 	if err != nil {
@@ -86,6 +89,9 @@ func TestLikeAndUnlikeIdempotentWithDB(t *testing.T) {
 	if len(cacheRecorder.deletedVideoIDs) != 1 || cacheRecorder.deletedVideoIDs[0] != v.ID {
 		t.Fatalf("cache deletions after idempotent likes = %v, want [%d]", cacheRecorder.deletedVideoIDs, v.ID)
 	}
+	if !reflect.DeepEqual(profileRecorder.deletedAccountIDs, []uint{author.ID, author.ID}) {
+		t.Fatalf("profile cache deletions after idempotent likes = %v, want [%d %d]", profileRecorder.deletedAccountIDs, author.ID, author.ID)
+	}
 
 	likesCount, err = likeService.Unlike(t.Context(), liker.ID, v.ID)
 	if err != nil {
@@ -120,6 +126,14 @@ func TestLikeAndUnlikeIdempotentWithDB(t *testing.T) {
 	}
 	if len(cacheRecorder.deletedVideoIDs) != 2 || cacheRecorder.deletedVideoIDs[1] != v.ID {
 		t.Fatalf("cache deletions after idempotent unlikes = %v, want [%d %d]", cacheRecorder.deletedVideoIDs, v.ID, v.ID)
+	}
+	if !reflect.DeepEqual(profileRecorder.deletedAccountIDs, []uint{author.ID, author.ID, author.ID, author.ID}) {
+		t.Fatalf("profile cache deletions after idempotent unlikes = %v", profileRecorder.deletedAccountIDs)
+	}
+
+	profileRecorder.err = errors.New("redis delete unavailable")
+	if _, err := likeService.Unlike(t.Context(), liker.ID, v.ID); err != nil {
+		t.Fatalf("idempotent unlike with profile cache failure error = %v", err)
 	}
 }
 
@@ -161,7 +175,7 @@ func TestLikeConcurrentIdempotent(t *testing.T) {
 	}
 
 	likeRepo := like.NewLikeRepo(sqlDB)
-	likeService := like.NewLikeService(likeRepo, nil)
+	likeService := like.NewLikeService(likeRepo, nil, nil)
 
 	concurrency := 20
 

@@ -20,13 +20,18 @@ import (
 )
 
 type VideoService struct {
-	repo       *VideoRepo
-	cache      DetailCache
-	uploadRoot string
+	repo         *VideoRepo
+	cache        DetailCache
+	profileCache ProfileCacheInvalidator
+	uploadRoot   string
 }
 
-func NewVideoService(repo *VideoRepo, cache DetailCache) *VideoService {
-	return &VideoService{repo: repo, cache: cache, uploadRoot: defaultUploadRoot}
+type ProfileCacheInvalidator interface {
+	DelProfile(ctx context.Context, accountID uint) error
+}
+
+func NewVideoService(repo *VideoRepo, cache DetailCache, profileCache ProfileCacheInvalidator) *VideoService {
+	return &VideoService{repo: repo, cache: cache, profileCache: profileCache, uploadRoot: defaultUploadRoot}
 }
 
 const (
@@ -102,7 +107,7 @@ func ToDTOs(videos []Video) []VideoDTO {
 	return dtos
 }
 
-func (service *VideoService) Publish(authorID uint, title, description, video_url, cover_url string) (*VideoDTO, error) {
+func (service *VideoService) Publish(ctx context.Context, authorID uint, title, description, video_url, cover_url string) (*VideoDTO, error) {
 	// [x] 缺少业务校验
 	if authorID == 0 {
 		return nil, ErrAuthorRequired
@@ -181,9 +186,24 @@ func (service *VideoService) Publish(authorID uint, title, description, video_ur
 		return nil, err
 	}
 
+	service.invalidateProfile(ctx, authorID)
+
 	dto := ToDTO(video)
 
 	return dto, nil
+}
+
+func (service *VideoService) invalidateProfile(ctx context.Context, accountID uint) {
+	if service.profileCache == nil {
+		return
+	}
+
+	delCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	err := service.profileCache.DelProfile(delCtx, accountID)
+	cancel()
+	if err != nil && !errors.Is(err, cache.ErrDisabled) {
+		log.Printf("level=WARN component=profile_cache operation=delete account_id=%d err=%q", accountID, err)
+	}
 }
 
 func (service *VideoService) GetDetail(ctx context.Context, id uint) (*VideoDTO, error) {

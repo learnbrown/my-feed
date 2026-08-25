@@ -42,7 +42,7 @@ func (handler *VideoHandler) PublishVideo(c *gin.Context) {
 		return
 	}
 
-	video, err := handler.service.Publish(authorID, input.Title, input.Description, input.PlayURL, input.CoverURL)
+	video, err := handler.service.Publish(c.Request.Context(), authorID, input.Title, input.Description, input.PlayURL, input.CoverURL)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrAuthorRequired):

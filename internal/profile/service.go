@@ -1,11 +1,13 @@
 package profile
 
 import (
+	"context"
 	"errors"
+	"log"
 	"my_feed/internal/account"
+	"my_feed/internal/cache"
 	"my_feed/internal/dberr"
-	"my_feed/internal/follow"
-	"my_feed/internal/video"
+	"time"
 )
 
 var (
@@ -14,20 +16,39 @@ var (
 )
 
 type ProfileService struct {
-	accountRepo *account.AccountRepo
-	videoRepo   *video.VideoRepo
-	followRepo  *follow.FollowRepo
+	accountRepo AccountReader
+	videoRepo   VideoStatsReader
+	followRepo  FollowStatsReader
+	cache       ProfileCache
 }
 
+type AccountReader interface {
+	FindAccountByID(id uint) (*account.Account, error)
+}
+
+type VideoStatsReader interface {
+	GetVideosCount(accountID uint) (int64, error)
+	GetAuthorLikesCount(accountID uint) (int64, error)
+}
+
+type FollowStatsReader interface {
+	GetFollowersCount(accountID uint) (int64, error)
+	GetFollowingsCount(accountID uint) (int64, error)
+}
+
+const profileCacheTTL = time.Minute
+
 func NewProfileService(
-	aR *account.AccountRepo,
-	vR *video.VideoRepo,
-	fR *follow.FollowRepo,
+	aR AccountReader,
+	vR VideoStatsReader,
+	fR FollowStatsReader,
+	profileCache ProfileCache,
 ) *ProfileService {
 	return &ProfileService{
 		accountRepo: aR,
 		videoRepo:   vR,
 		followRepo:  fR,
+		cache:       profileCache,
 	}
 }
 
@@ -51,10 +72,24 @@ type Profile struct {
 	Stats   *ProfileStats   `json:"stats"`
 }
 
-func (service *ProfileService) GetProfile(accountID uint) (*Profile, error) {
+func (service *ProfileService) GetProfile(ctx context.Context, accountID uint) (*Profile, error) {
 	if accountID == 0 {
 		return nil, ErrAccountRequired
 	}
+
+	if service.cache != nil {
+		getCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+		cached, hit, err := service.cache.GetProfile(getCtx, accountID)
+		cancel()
+		if err == nil {
+			if hit {
+				return &cached, nil
+			}
+		} else if !errors.Is(err, cache.ErrDisabled) {
+			log.Printf("level=WARN component=profile_cache operation=get account_id=%d err=%q", accountID, err)
+		}
+	}
+
 	// 查询用户信息
 	account, err := service.accountRepo.FindAccountByID(accountID)
 	if err != nil {
@@ -102,6 +137,15 @@ func (service *ProfileService) GetProfile(accountID uint) (*Profile, error) {
 	profile := &Profile{
 		Account: profileAccount,
 		Stats:   profileStats,
+	}
+
+	if service.cache != nil {
+		setCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+		err = service.cache.SetProfile(setCtx, accountID, *profile, profileCacheTTL)
+		cancel()
+		if err != nil && !errors.Is(err, cache.ErrDisabled) {
+			log.Printf("level=WARN component=profile_cache operation=set account_id=%d err=%q", accountID, err)
+		}
 	}
 
 	return profile, nil

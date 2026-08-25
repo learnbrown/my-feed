@@ -8,7 +8,7 @@ import (
 
 func TestSelfFollow(t *testing.T) {
 	service := FollowService{}
-	err := service.Follow(1, 1)
+	err := service.Follow(t.Context(), 1, 1)
 	if !errors.Is(err, ErrSelfFollowing) {
 		t.Fatalf("expected ErrSelfFollowing, got %v", err)
 	}
@@ -40,10 +40,10 @@ func TestFollowIDValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := service.Follow(tt.followerID, tt.vloggerID); !errors.Is(err, tt.wantErr) {
+			if err := service.Follow(t.Context(), tt.followerID, tt.vloggerID); !errors.Is(err, tt.wantErr) {
 				t.Fatalf("Follow() error = %v, want %v", err, tt.wantErr)
 			}
-			if err := service.Unfollow(tt.followerID, tt.vloggerID); !errors.Is(err, tt.wantErr) {
+			if err := service.Unfollow(t.Context(), tt.followerID, tt.vloggerID); !errors.Is(err, tt.wantErr) {
 				t.Fatalf("Unfollow() error = %v, want %v", err, tt.wantErr)
 			}
 			if _, err := service.IsFollowing(tt.followerID, tt.vloggerID); !errors.Is(err, tt.wantErr) {
