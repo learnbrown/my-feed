@@ -1,4 +1,4 @@
-# CLAUDE.MD
+# AGENTS.md
 
 ## 项目定位
 
@@ -19,7 +19,7 @@ V2.0 可选微服务拆分
 
 - `feedsystem_video_go项目设计.md`：原参考项目的业务和架构设计。
 - `项目导览.md`：原参考项目代码结构和调用链分析。
-- `实现指导.md`：本项目阶段性实现路线，当前已推进到 V1.0 前。
+- `实现指导.md`：本项目阶段性实现路线，当前正在推进 V1.0。
 - `doc/*.md`：当前项目 API 文档。
 
 ## 协作角色
@@ -36,15 +36,15 @@ V2.0 可选微服务拆分
 
 ## 当前仓库
 
-实际仓库路径：
+当前工作区实际仓库路径：
 
 ```text
-/home/reinerbrown/golang/my-feed
+/Users/chengyue2303/Projects/my-feed
 ```
 
 注意：
 
-- 早期上下文中出现过旧路径 `/home/reinerbrown/golang/my_feed`，现在应忽略。
+- 早期上下文中出现过 `/home/reinerbrown/golang/my_feed` 和 `/home/reinerbrown/golang/my-feed`，当前 macOS 工作区均不使用这两个路径。
 - Go module/import 路径里仍可能是 `my_feed`，这是代码层面的 module 名，不等同于磁盘目录名。
 
 ## 当前进度
@@ -58,7 +58,7 @@ V2.0 可选微服务拆分
 - bcrypt 密码哈希与校验。
 - JWT 生成、解析、鉴权中间件。
 - 服务端 token 存储与登出撤销。
-- SQLite/MySQL 通过环境变量切换。
+- MySQL 配置支持 YAML 和环境变量覆盖。
 - 唯一索引错误识别。
 - `handler -> service -> repository` 基础分层。
 
@@ -66,11 +66,11 @@ V2.0 可选微服务拆分
 
 ```text
 登录成功 -> 生成 JWT -> 写入 accounts.token -> 返回前端
-鉴权 -> 解析 JWT -> 查账号 -> 比较数据库 token -> 通过
-登出 -> 清空 accounts.token
+鉴权 -> 解析 JWT -> 优先比较 Redis token -> miss/异常时查 MySQL
+登出 -> 删除 Redis token + 清空 accounts.token
 ```
 
-这个设计可以支持服务端主动撤销 token。后续 V1.0 可以把 token 校验缓存到 Redis，但 MySQL 仍是最终可信来源。
+这个设计支持服务端主动撤销 token。V1.0 已加入 Redis token 缓存，但 MySQL 仍是最终可信来源。当前仍需收口登录、登出和鉴权回填之间的一致性窗口，不能把 token 缓存完全等同于允许短暂旧数据的普通读缓存。
 
 ### V0.2：视频发布 MVP + 基础 Feed，已完成 MVP
 
@@ -117,13 +117,39 @@ V0.3 的核心训练点已经覆盖：
 - 聚合：`getProfile` 统计视频数、获赞数、粉丝数、关注数。
 - 分页：避免简单 offset，使用稳定游标分页。
 
+### V1.0：Redis 高并发读优化，进行中
+
+已完成：
+
+- `go-redis/v9`、Redis 配置和环境变量覆盖。
+- `internal/cache` 基础封装、统一 key、启动 `Ping` 和启动时降级。
+- JWT token 缓存：Redis hit、miss 回源 MySQL、成功后回填。
+- 视频详情 Cache Aside，TTL 为 5 分钟。
+- 点赞、取消点赞、评论发布和评论删除后的详情缓存失效。
+- Redis key、token cache、detail cache、JWT middleware 等测试。
+- 第一批 service、handler 和 MySQL 集成测试；MySQL 测试需要 `RUN_MYSQL_TESTS=1` 显式启用。
+
+当前待收口：
+
+- 登录当前会先删除旧缓存，但没有与鉴权 miss 回填共享同一账号级临界区；旧 token 可能在删除后被并发回填。
+- 登出当前先删除 Redis，删除失败会保留 MySQL token 并返回失败。这是正确性优先策略，但要明确它与“Redis 故障时核心业务降级”的边界。
+- token 写入和鉴权回填使用固定 2 小时 TTL，应改为 JWT 实际剩余有效期。
+- 需要增加登录/登出/鉴权并发测试，覆盖旧 token 回填、缓存删除失败和 MySQL 更新失败。
+- 尚未实现用户主页缓存、Feed ZSET、热榜和限流。
+- 尚未建立 Bruno 主链路、批量测试数据和 Redis 前后压测基线。
+
+下一个功能目标是用户主页短 TTL Cache Aside；开始之前先完成 token 缓存一致性收口。
+
 ## 当前模块结构
 
 ```text
 internal/account/     账号、登录、登出、当前用户
 internal/auth/        JWT token 生成和解析
+internal/cache/       Redis client、基础操作和统一 key
 internal/comment/     评论业务
-internal/db/          DB 初始化、SQLite/MySQL 切换、数据库错误识别
+internal/config/      YAML 配置和环境变量覆盖
+internal/db/          MySQL 初始化和测试数据库工具
+internal/dberr/       数据库错误识别
 internal/feed/        Feed 查询
 internal/follow/      关注关系
 internal/like/        点赞业务
@@ -131,6 +157,7 @@ internal/message/     私信业务
 internal/middleware/  JWT 鉴权中间件
 internal/profile/     用户主页聚合
 internal/router/      路由装配
+internal/integration/ MySQL、HTTP 和缓存集成测试
 internal/video/       视频、上传、标签、视频查询
 ```
 
@@ -240,14 +267,14 @@ WHERE created_at < ?
 
 ## 当前注意事项
 
-这些不是立刻必须完成，但后续继续写 V1.0 前要心里有数：
+这些不是立刻都要完成，但继续推进 V1.0 时要心里有数：
 
 - 检查所有列表接口是否都拒绝非法游标组合，例如只传 `latest_time` 不传 `latest_id`，或只传 `latest_id` 不传 `latest_time`。
 - 对负数 `latest_time` 的处理要统一。不要让负时间戳被当成第一页。
 - API 文档要持续跟进双游标字段，避免前后端契约漂移。
 - DTO 不要半途而废，尤其是视频、评论、私信、关注列表，避免把模型内部字段暴露出去。
 - `#C#` 这类标签提取规则如果后续继续打磨，需要专门设计正则和测试样例。
-- 当前仍是同步 MySQL 版本。不要急着上 MQ；同步版本不稳，异步化只会把错误藏得更深。
+- 当前业务写链路仍是同步 MySQL，Redis 只负责缓存和加速。不要急着上 MQ；同步版本不稳，异步化只会把错误藏得更深。
 
 建议重点检查和补齐的索引：
 
@@ -266,7 +293,7 @@ messages: (to_id, from_id, created_at, id)
 
 ## V1.0：Redis 高并发读优化
 
-下一阶段目标不是“把 Redis 塞进所有地方”，而是用 Redis 解决 V0.3 后已经出现的高频读问题：
+当前阶段目标不是“把 Redis 塞进所有地方”，而是用 Redis 解决 V0.3 后已经出现的高频读问题：
 
 - Feed 最新流读取频繁。
 - 视频详情读取频繁。
@@ -281,7 +308,7 @@ messages: (to_id, from_id, created_at, id)
 
 - MySQL 仍是最终数据源。
 - Redis 首先作为缓存和加速层，不要一开始就当主存储。
-- Redis 不可用时，核心业务应能降级回 MySQL，只是变慢，不能直接全站挂掉。
+- Redis 不可用时，普通读缓存应降级回 MySQL，只是变慢，不能直接全站挂掉。token 登录/登出写路径若仍信任 Redis positive hit，则按立即撤销要求作为 fail-closed 例外。
 - 每个 Redis key 都要能讲清楚解决什么问题。
 - 缓存必须考虑失效策略，不能只写读缓存不写删除/更新逻辑。
 
@@ -295,16 +322,18 @@ messages: (to_id, from_id, created_at, id)
 
 ### V1.0 推荐推进顺序
 
-#### 1. Redis 基础设施
+#### 1. Redis 基础设施，已完成
 
-新增建议：
+当前实现：
 
 ```text
 internal/cache/
+  cache.go
+  keys.go
   redis.go
 ```
 
-要做的事：
+已完成：
 
 - 使用 `go-redis/v9`。
 - 通过环境变量配置 Redis 地址、密码、DB。
@@ -323,7 +352,7 @@ myfeed:rank:hot
 myfeed:rate:{scene}:{identifier}
 ```
 
-#### 2. JWT token 缓存
+#### 2. JWT token 缓存，已完成基础读路径，待一致性收口
 
 改造目标：
 
@@ -340,7 +369,24 @@ MySQL 命中 -> 回填 Redis
 - Redis token 只是加速，不能让它破坏登出语义。
 - 登出时 Redis 和 MySQL 都要处理。
 
-#### 3. 视频详情缓存
+当前问题不是简单调整两行调用顺序。只要 `JWTAuth` 在 Redis hit 时可以直接放行，Redis 中的旧 token 就属于安全问题，而不是普通缓存允许的短暂旧数据。
+
+当前单体阶段采用“正确性优先”方案：
+
+1. 明确故障契约：鉴权的 Redis `GET` 失败可以回源 MySQL；登录和登出属于会改变会话有效性的写操作，缓存写失败不能在仍信任 Redis hit 的同时假装成功。
+   - Redis 在启动时未启用或 `Ping` 失败：整个进程不信任 Redis token cache，登录/登出直接使用 MySQL，可以正常降级。
+   - Redis 已启用并可能存在被鉴权信任的 token key，但运行中 `DEL` 失败：按 fail-closed 返回 `503`。
+2. 登录在同一账号的会话临界区内先 `DEL` 旧缓存；`DEL` 失败时不更新 MySQL，并返回 `503`。确认旧缓存已删除后更新 MySQL token，再尝试 `SET` 新缓存。此时 `SET` 失败可以返回登录成功，因为旧 key 已确认删除，后续鉴权会从 MySQL 回源。
+3. 登出在同一临界区内删除 Redis token，再清空 MySQL token；删除失败时不清空 MySQL，也不返回“登出成功”。HTTP 层应把缓存基础设施故障映射为 `503 Service Unavailable`，而不是含糊的业务错误。
+4. `JWTAuth` 的 cache miss 回源和回填也必须进入同一账号的临界区，并在获得锁后重新检查缓存，避免登出删除后并发鉴权把旧 token 回填。
+5. Redis token cache 启用前清理当前前缀下的旧 token key，避免服务曾在 Redis 不可用时更新 MySQL、随后重启又信任历史缓存。当前学习项目可用 `SCAN + UNLINK/DEL`；不能使用阻塞式 `KEYS`。
+6. 当前单实例可先使用按 `account_id` 分片的进程内锁；如果后续部署多实例，必须改为可跨实例的会话版本/分布式协调方案，进程内锁不能继续作为一致性保证。
+7. `SetToken` 的 TTL 从 JWT `ExpiresAt` 计算剩余时间；剩余时间小于等于零时不写缓存。
+8. 增加并发和故障测试：旧 token 回填与登出并发、Redis `SET/DEL` 失败、MySQL 更新失败、连续登录旧 token 失效、启动清理和 TTL 不超过 JWT 剩余时间。
+
+必须把可用性取舍讲清楚：如果要求 Redis 故障时登录和登出也始终成功，就不能同时把 Redis positive hit 当作立即撤销的权威判断。可选方案只有每次回查 MySQL，或者接受最长为缓存 TTL 的旧 token 窗口。当前项目强调服务端立即撤销，因此先选择写路径 fail-closed，普通读缓存仍然 fail-open。
+
+#### 3. 视频详情缓存，已完成 MVP
 
 适合先做，因为它边界清楚。
 
@@ -357,7 +403,9 @@ Cache Aside
 - 修改视频、删除视频、改变状态时要删除详情缓存。
 - 点赞数、评论数变化后，要么删除详情缓存，要么更新缓存里的计数字段。学习阶段建议先删除缓存，逻辑更稳。
 
-#### 4. 用户主页聚合缓存
+当前点赞、取消点赞、评论发布和评论删除已经采用删除详情缓存的策略。Redis miss、读取失败或写入失败不会阻断视频详情的 MySQL 返回。
+
+#### 4. 用户主页聚合缓存，下一项功能目标
 
 `getProfile` 会聚合多张表：
 
@@ -376,7 +424,10 @@ V1.0 可以把主页结果缓存短 TTL，例如 30 秒到 120 秒。
 - 关注/取关会影响粉丝数和关注数。
 - 点赞/取消点赞会影响作者获赞数。
 - 发布/删除视频会影响作品数。
-- 学习阶段可以先用短 TTL 降低失效复杂度，再逐步加主动删除。
+- 第一版使用 60 秒 TTL；Redis miss 或异常时回源 MySQL，缓存写失败不影响响应。
+- 第一版即补主动删除：关注/取关删除双方主页缓存，点赞/取消点赞删除视频作者主页缓存，发布视频删除作者主页缓存。
+- 如果主动删除失败，业务写入仍以 MySQL 事务结果为准，依靠 60 秒 TTL 收敛旧数据，同时记录日志和指标。
+- 评论不会改变当前主页统计，不需要删除主页缓存。
 
 #### 5. Feed 最新流缓存
 
@@ -465,6 +516,14 @@ EXPIRE key window_seconds
 env GOCACHE=/tmp/go-build-cache go test ./...
 ```
 
+默认测试会执行单元测试和 miniredis 测试；MySQL 集成测试在未设置 `RUN_MYSQL_TESTS=1` 时会跳过。显式执行集成测试必须使用以 `_test` 结尾的独立数据库：
+
+```bash
+RUN_MYSQL_TESTS=1 \
+MYSQL_DBNAME=myfeed_test \
+env GOCACHE=/tmp/go-build-cache go test ./internal/integration -v
+```
+
 格式化：
 
 ```bash
@@ -477,15 +536,14 @@ gofmt -w internal
 go run ./cmd
 ```
 
-切换 MySQL 示例：
+覆盖 MySQL 配置示例：
 
 ```bash
-DB_DRIVER=mysql \
 MYSQL_USER=dev_user \
 MYSQL_PASSWORD=qwerdf \
 MYSQL_HOST=127.0.0.1 \
 MYSQL_PORT=3306 \
-MYSQL_DATABASE=db001 \
+MYSQL_DBNAME=db001 \
 go run ./cmd
 ```
 
@@ -503,9 +561,8 @@ go run ./cmd
 当前下一步建议：
 
 ```text
-先封装 Redis client 和配置
-再改造 JWT token 缓存
-再做 video detail / profile 的 Cache Aside
+先收口 JWT token 缓存的一致性、TTL 和故障语义
+再做 profile 的 60 秒 Cache Aside 和主动失效
 然后做 Feed ZSET
 最后做热榜和限流
 ```

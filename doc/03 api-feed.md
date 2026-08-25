@@ -37,6 +37,7 @@ Status: `200 OK`
 {
   "has_more": true,
   "next_time": 1782371434668,
+  "next_id": 8,
   "videos": [
     {
       "id": 32,

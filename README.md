@@ -4,7 +4,18 @@
 
 根据以上视频，在AI指导下，自行实现视频feed流系统
 
-## V0.1X 账号注册 / 登录 / JWT / 基础分层
+当前里程碑：
+
+```text
+V0.1 单体骨架 + 账号认证                    已完成 MVP
+V0.2 视频发布 + 基础 Feed                   已完成 MVP
+V0.3 点赞、评论、关注、主页、私信           已完成 MVP
+V1.0 Redis 高并发读优化                     进行中
+V1.5 MQ + Worker 事件驱动                   未开始
+V2.0 可选微服务拆分                         未开始
+```
+
+## V0.1 账号注册 / 登录 / JWT / 基础分层
 
 将数据库、路由、中间件、JWT令牌方法模型定义处理放入不同模块中实现
 
@@ -48,45 +59,39 @@
 实现对数据库的增删改查
 
 
-## V0.2X 视频上传
+## V0.2 视频上传
 
-### latest_time游标分页
+### `latest_time + latest_id` 复合游标分页
 
-`listByAuthorID` 查询作者作品列表时，如果作者有很多视频，一次不能全返回，需要进行分页
+所有列表接口均使用 `created_at + id` 形成稳定顺序，避免多条记录创建时间相同时漏数据或重复数据。
 
-`latest_time` 的意思是：给我创建时间早于 latest_time 的视频
-
-第一页时 `latest_time = 0`
+第一页：
 
 ```json
 {
   "author_id": 1,
   "limit": 20,
-  "latest_time": 0
+  "latest_time": 0,
+  "latest_id": 0
 }
 ```
-服务端返回最新20条视频。取最后一条视频的`created_at`，作为`next_time`
 
-第二页时 `latest_time = next_time`
+下一页使用上次响应的 `next_time + next_id`：
 
 ```json
 {
   "author_id": 1,
   "limit": 20,
-  "latest_time": next_time
+  "latest_time": next_time,
+  "latest_id": next_id
 }
 ```
-
-这样即使中间作者发布了新的视频，第二页也不会被新视频打乱。
-
-实现了从上一页的最后一个视频处，加载20条视频
-
-但这样还有一个不足：多个视频可能有完全相同的 `created_at`，同一时间创建但还没展示完的视频可能被跳过
-
-后续升级为 `created_at` + `id` 复合游标
 
 ```sql
-order by created_at desc, id desc
+ORDER BY created_at DESC, id DESC
+
+WHERE created_at < ?
+   OR (created_at = ? AND id < ?)
 ```
 
 ### publish 提取tag并创建关联
@@ -102,7 +107,7 @@ func (repo *VideoRepo) Transaction(fn func(txRepo *VideoRepo) error) error {
 }
 ```
 
-## V0.3X 点赞、关注、私信功能
+## V0.3 点赞、关注、私信功能
 
 ### like
 
@@ -153,4 +158,50 @@ DTO：服务于接口入参/出参
 
 而数据库保存的`created_at`精度含有微秒/纳秒，会导致有些数据被漏掉
 
-TODO: 单独抽一个 internal/cursor 包，把所有 list 接口统一升级成 cursor/next_cursor
+后续可选方案是抽取 `internal/cursor`，升级为不透明的 `cursor/next_cursor`，把完整时间精度和 ID 一起编码。
+
+## V1.0 Redis 高并发读优化（进行中）
+
+已完成：
+
+- Redis 配置、client、启动 `Ping`、统一 key 前缀，以及启动时不可用则禁用缓存。
+- JWT token 缓存：Redis hit 校验，miss 或读取异常回源 MySQL，成功后回填。
+- 视频详情 Cache Aside，TTL 为 5 分钟。
+- 点赞、取消点赞、发布评论、删除评论后删除视频详情缓存。
+- service/handler 单元测试、miniredis 测试和需要显式启用的 MySQL 集成测试。
+
+当前待收口：
+
+- token 缓存的登录、登出和鉴权回填之间仍有并发一致性窗口。
+- token TTL 目前固定为 2 小时，应改成 JWT 的实际剩余有效期。
+- MySQL 集成测试默认跳过，尚未建立持续执行环境。
+- 尚未建立 Bruno 主链路、批量数据生成和 Redis 前后性能基线。
+
+下一步：
+
+```text
+先收口 token 缓存的一致性和故障语义
+  -> 用户主页聚合 Cache Aside
+  -> Feed 最新流 ZSET
+  -> 热榜 ZSET
+  -> 基础限流
+```
+
+MySQL 仍是最终数据源。普通缓存读取失败时回源 MySQL；token 缓存因为涉及立即撤销语义，登录和登出的缓存写失败必须采用明确的正确性策略，不能直接套用普通读缓存的 fail-open 规则。具体方案见 `AGENTS.md` 和 `实现指导.md`。
+
+## 验证
+
+默认测试：
+
+```bash
+env GOCACHE=/tmp/go-build-cache go test ./...
+env GOCACHE=/tmp/go-build-cache go vet ./...
+```
+
+MySQL 集成测试必须使用以 `_test` 结尾的独立数据库，并显式启用：
+
+```bash
+RUN_MYSQL_TESTS=1 \
+MYSQL_DBNAME=myfeed_test \
+env GOCACHE=/tmp/go-build-cache go test ./internal/integration -v
+```
