@@ -11,7 +11,7 @@ import (
 func TestGenerateAndParseToken(t *testing.T) {
 	t.Setenv("JWT_SECRET", "unit-test-secret")
 
-	token, err := GenerateToken(42, "alice")
+	token, expiresAt, err := GenerateToken(42, "alice")
 	if err != nil {
 		t.Fatalf("GenerateToken() error = %v", err)
 	}
@@ -26,6 +26,9 @@ func TestGenerateAndParseToken(t *testing.T) {
 	if claims.ExpiresAt == nil || claims.IssuedAt == nil {
 		t.Fatalf("expected issued_at and expires_at claims")
 	}
+	if !claims.ExpiresAt.Time.Equal(expiresAt) {
+		t.Fatalf("returned expiration = %s, claim expiration = %s", expiresAt, claims.ExpiresAt.Time)
+	}
 	if claims.ID == "" {
 		t.Fatal("expected token id claim")
 	}
@@ -34,11 +37,11 @@ func TestGenerateAndParseToken(t *testing.T) {
 func TestGenerateTokenProducesUniqueTokens(t *testing.T) {
 	t.Setenv("JWT_SECRET", "unit-test-secret")
 
-	first, err := GenerateToken(42, "alice")
+	first, _, err := GenerateToken(42, "alice")
 	if err != nil {
 		t.Fatalf("first GenerateToken() error = %v", err)
 	}
-	second, err := GenerateToken(42, "alice")
+	second, _, err := GenerateToken(42, "alice")
 	if err != nil {
 		t.Fatalf("second GenerateToken() error = %v", err)
 	}
@@ -50,7 +53,7 @@ func TestGenerateTokenProducesUniqueTokens(t *testing.T) {
 func TestGeneratedFallbackSecretIsStableWithinProcess(t *testing.T) {
 	t.Setenv("JWT_SECRET", "")
 
-	token, err := GenerateToken(7, "fallback-user")
+	token, _, err := GenerateToken(7, "fallback-user")
 	if err != nil {
 		t.Fatalf("GenerateToken() error = %v", err)
 	}
@@ -67,7 +70,7 @@ func TestGeneratedFallbackSecretIsStableWithinProcess(t *testing.T) {
 func TestParseTokenRejectsTamperedToken(t *testing.T) {
 	t.Setenv("JWT_SECRET", "unit-test-secret")
 
-	token, err := GenerateToken(42, "alice")
+	token, _, err := GenerateToken(42, "alice")
 	if err != nil {
 		t.Fatalf("GenerateToken() error = %v", err)
 	}

@@ -49,7 +49,7 @@
 - 实现最新视频 Feed、标签 Feed、作者作品等列表接口，使用 `created_at + id` 复合游标分页，并通过查询 `limit + 1` 条记录判断是否存在下一页，避免 `offset` 分页在新增数据场景下可能出现的重复或漏读问题。
 - 实现点赞、取消点赞、评论发布、评论删除等功能；在涉及关系记录和视频计数字段变更时使用 GORM 事务，保证多表更新一致性。
 - 为点赞表设置“用户 ID + 视频 ID”唯一索引，为关注表设置 `follower_id + vlogger_id` 唯一索引；重复点赞或重复关注时识别唯一索引冲突并返回成功，保证接口幂等。
-- 使用 Redis cache-aside 缓存账号 token 和视频详情信息；token 缓存 TTL 为 2 小时，视频详情缓存 TTL 为 5 分钟，点赞和评论变更后删除对应视频详情缓存。
+- 使用 Redis cache-aside 缓存账号 token 和视频详情；token 缓存 TTL 不超过 JWT 剩余有效期和 5 分钟，miss、异常或 mismatch 时回源 MySQL，点赞和评论变更后删除视频详情缓存。
 - 使用 Bruno 整理接口请求并进行联调，尝试为部分 service 逻辑和 HTTP 接口补充 Go testing / `httptest` 测试。
 
 ---

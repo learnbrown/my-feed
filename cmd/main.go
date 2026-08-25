@@ -18,7 +18,7 @@ func main() {
 	// 加载.env
 	err := godotenv.Load()
 	if err != nil {
-		log.Println(".env not found, continue")
+		log.Printf("level=INFO component=startup operation=load_env status=not_found action=continue")
 	}
 
 	// 加载config
@@ -26,41 +26,48 @@ func main() {
 	if configPath == "" {
 		configPath = "configs/config.yaml"
 	}
-	log.Printf("Loading config from %s", configPath)
+	log.Printf("level=INFO component=startup operation=load_config path=%q", configPath)
 	cfg, useDefault, err := config.LoadLoaclDev(configPath)
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		log.Fatalf("level=FATAL component=startup operation=load_config err=%q", err)
 	}
 	if useDefault {
-		log.Printf("Config file %s not found, using default local config", configPath)
+		log.Printf("level=INFO component=startup operation=load_config path=%q status=not_found action=use_local_defaults", configPath)
 	} else {
-		log.Printf("Config loaded from file: %s", configPath)
+		log.Printf("level=INFO component=startup operation=load_config path=%q status=loaded", configPath)
 	}
 
 	// 连接数据库
 	sqlDB, err := db.NewDB(cfg.Database)
 	if err != nil {
-		log.Fatalf("Failed to connect database: %v", err)
+		log.Fatalf("level=FATAL component=startup operation=connect_mysql err=%q", err)
 	}
 	err = db.AutoMigrate(sqlDB)
 	if err != nil {
-		log.Fatalf("Failed to auto migrate database: %v", err)
+		log.Fatalf("level=FATAL component=startup operation=auto_migrate err=%q", err)
 	}
+	log.Printf("level=INFO component=startup operation=connect_mysql status=ready")
 
 	// 连接Redis
-	rediscache, err := cache.NewRedis(&cfg.Redis)
-	if err != nil {
-		log.Printf("Failed to connect redis (cache disabled): %v", err)
+	var rediscache *cache.Client
+	if !cfg.Redis.Enabled {
+		log.Printf("level=INFO component=startup operation=connect_redis status=disabled")
 	} else {
-		pingCtx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
-		defer cancel()
-		if err := rediscache.Ping(pingCtx); err != nil {
-			log.Printf("Redis not available (cache disabled): %v", err)
-			_ = rediscache.Close()
-			rediscache = nil
+		rediscache, err = cache.NewRedis(&cfg.Redis)
+		if err != nil {
+			log.Printf("level=WARN component=startup operation=connect_redis status=disabled err=%q", err)
 		} else {
-			defer rediscache.Close()
-			log.Printf("Redis connected (cache enabled)")
+			pingCtx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+			pingErr := rediscache.Ping(pingCtx)
+			cancel()
+			if pingErr != nil {
+				log.Printf("level=WARN component=startup operation=ping_redis status=disabled err=%q", pingErr)
+				_ = rediscache.Close()
+				rediscache = nil
+			} else {
+				defer rediscache.Close()
+				log.Printf("level=INFO component=startup operation=connect_redis status=ready")
+			}
 		}
 	}
 
@@ -69,6 +76,6 @@ func main() {
 
 	err = r.Run(":" + strconv.Itoa(cfg.Server.Port))
 	if err != nil {
-		log.Fatalf("Failed to run server: %v", err)
+		log.Fatalf("level=FATAL component=startup operation=run_http_server port=%d err=%q", cfg.Server.Port, err)
 	}
 }

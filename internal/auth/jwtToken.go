@@ -27,12 +27,12 @@ func jwtSecret() []byte {
 	fallbackSecretOnce.Do(func() {
 		b := make([]byte, 32)
 		if _, err := rand.Read(b); err != nil {
-			log.Printf("FATAL: cannot generate JWT secret: %v", err)
+			log.Printf("level=ERROR component=auth operation=generate_fallback_secret action=use_development_fallback err=%q", err)
 			fallbackSecret = []byte("fallback-unsafe-key-change-me")
 			return
 		}
 		fallbackSecret = []byte(hex.EncodeToString(b))
-		log.Printf("WARNING: JWT_SECRET not set, generated random key. All tokens invalid on restart.")
+		log.Printf("level=WARN component=auth operation=load_jwt_secret action=generated_ephemeral_secret message=%q", "JWT_SECRET is not set; tokens become invalid after restart")
 	})
 
 	return fallbackSecret
@@ -44,11 +44,13 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-func GenerateToken(accountID uint, username string) (string, error) {
+func GenerateToken(accountID uint, username string) (string, time.Time, error) {
 	tokenIDBytes := make([]byte, 16)
 	if _, err := rand.Read(tokenIDBytes); err != nil {
-		return "", err
+		return "", time.Time{}, err
 	}
+	now := time.Now()
+	expiresAt := jwt.NewNumericDate(now.Add(2 * time.Hour))
 
 	// 设置token的声明信息
 	claims := Claims{
@@ -58,10 +60,10 @@ func GenerateToken(accountID uint, username string) (string, error) {
 			// 保证同一用户连续登录时也会生成不同 token，使旧 token 能被服务端撤销。
 			ID: hex.EncodeToString(tokenIDBytes),
 			// 设置2小时后过期
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(2 * time.Hour)),
+			ExpiresAt: expiresAt,
 
 			// 签发时间
-			IssuedAt: jwt.NewNumericDate(time.Now()),
+			IssuedAt: jwt.NewNumericDate(now),
 		},
 	}
 
@@ -69,7 +71,11 @@ func GenerateToken(accountID uint, username string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	// 使用使用密钥签名并获得完整字符串token
-	return token.SignedString(jwtSecret())
+	tokenString, err := token.SignedString(jwtSecret())
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	return tokenString, expiresAt.Time, nil
 }
 
 // 解析token

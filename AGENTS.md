@@ -21,6 +21,7 @@ V2.0 可选微服务拆分
 - `项目导览.md`：原参考项目代码结构和调用链分析。
 - `实现指导.md`：本项目阶段性实现路线，当前正在推进 V1.0。
 - `doc/*.md`：当前项目 API 文档。
+- `doc/09 token缓存折中改造方案.md`：当前 token 缓存收口的具体设计和验收标准。
 
 ## 协作角色
 
@@ -67,10 +68,10 @@ V2.0 可选微服务拆分
 ```text
 登录成功 -> 生成 JWT -> 写入 accounts.token -> 返回前端
 鉴权 -> 解析 JWT -> 优先比较 Redis token -> miss/异常时查 MySQL
-登出 -> 删除 Redis token + 清空 accounts.token
+登出 -> 清空 accounts.token -> 尝试删除 Redis token
 ```
 
-这个设计支持服务端主动撤销 token。V1.0 已加入 Redis token 缓存，但 MySQL 仍是最终可信来源。当前仍需收口登录、登出和鉴权回填之间的一致性窗口，不能把 token 缓存完全等同于允许短暂旧数据的普通读缓存。
+MySQL 设计支持服务端主动撤销 token。V1.0 已加入 Redis token 缓存，收口后采用有界最终一致性：正常登录/登出主动维护缓存，Redis 写失败时旧值最多保留 5 分钟，不宣称故障场景下严格实时撤销。
 
 ### V0.2：视频发布 MVP + 基础 Feed，已完成 MVP
 
@@ -129,16 +130,20 @@ V0.3 的核心训练点已经覆盖：
 - Redis key、token cache、detail cache、JWT middleware 等测试。
 - 第一批 service、handler 和 MySQL 集成测试；MySQL 测试需要 `RUN_MYSQL_TESTS=1` 显式启用。
 
-当前待收口：
+本轮已收口：
 
-- 登录当前会先删除旧缓存，但没有与鉴权 miss 回填共享同一账号级临界区；旧 token 可能在删除后被并发回填。
-- 登出当前先删除 Redis，删除失败会保留 MySQL token 并返回失败。这是正确性优先策略，但要明确它与“Redis 故障时核心业务降级”的边界。
-- token 写入和鉴权回填使用固定 2 小时 TTL，应改为 JWT 实际剩余有效期。
-- 需要增加登录/登出/鉴权并发测试，覆盖旧 token 回填、缓存删除失败和 MySQL 更新失败。
+- token cache TTL 使用 `min(JWT 剩余有效期, 5 分钟)`，命中不续期。
+- 登录和登出都先更新 MySQL，再尝试更新/删除 Redis；Redis 失败只记录降级日志。
+- Redis miss、读取异常或 token mismatch 时回查 MySQL，数据库匹配后用短 TTL 回填。
+- 已补 TTL、MySQL/Redis 失败、mismatch 回源、旧 token 有界失效和缓存不续期测试。
+- 已删除缓存 hit/miss/success 高频日志，保留启动日志和带业务 ID 的缓存异常日志。
+
+当前待继续：
+
 - 尚未实现用户主页缓存、Feed ZSET、热榜和限流。
 - 尚未建立 Bruno 主链路、批量测试数据和 Redis 前后压测基线。
 
-下一个功能目标是用户主页短 TTL Cache Aside；开始之前先完成 token 缓存一致性收口。
+下一个功能目标是用户主页 60 秒 Cache Aside 和主动失效。
 
 ## 当前模块结构
 
@@ -308,7 +313,7 @@ messages: (to_id, from_id, created_at, id)
 
 - MySQL 仍是最终数据源。
 - Redis 首先作为缓存和加速层，不要一开始就当主存储。
-- Redis 不可用时，普通读缓存应降级回 MySQL，只是变慢，不能直接全站挂掉。token 登录/登出写路径若仍信任 Redis positive hit，则按立即撤销要求作为 fail-closed 例外。
+- Redis 不可用时缓存应降级回 MySQL，只是变慢，登录、鉴权和登出不能因此不可用。
 - 每个 Redis key 都要能讲清楚解决什么问题。
 - 缓存必须考虑失效策略，不能只写读缓存不写删除/更新逻辑。
 
@@ -352,7 +357,7 @@ myfeed:rank:hot
 myfeed:rate:{scene}:{identifier}
 ```
 
-#### 2. JWT token 缓存，已完成基础读路径，待一致性收口
+#### 2. JWT token 缓存，已完成折中方案收口
 
 改造目标：
 
@@ -360,7 +365,7 @@ myfeed:rate:{scene}:{identifier}
 鉴权 -> 先查 Redis token
 Redis miss -> 查 MySQL accounts.token
 MySQL 命中 -> 回填 Redis
-登出 -> 删除 Redis token + 清空 MySQL token
+登出 -> 清空 MySQL token -> 尝试删除 Redis token
 ```
 
 注意：
@@ -369,22 +374,19 @@ MySQL 命中 -> 回填 Redis
 - Redis token 只是加速，不能让它破坏登出语义。
 - 登出时 Redis 和 MySQL 都要处理。
 
-当前问题不是简单调整两行调用顺序。只要 `JWTAuth` 在 Redis hit 时可以直接放行，Redis 中的旧 token 就属于安全问题，而不是普通缓存允许的短暂旧数据。
+当前已实现“主动更新/删除 + 5 分钟 TTL”的有界最终一致性方案：
 
-当前单体阶段采用“正确性优先”方案：
+1. MySQL 始终是 token 最终数据源；Redis `GET/SET/DEL` 失败只记录日志，不阻断登录、鉴权回源或登出。
+2. 登录先更新 MySQL token，再用 `SET` 尝试原子覆盖 Redis，不再预先 `DEL`。
+3. 登出先清空 MySQL token，再尝试删除 Redis key。
+4. Redis hit 且 token 相同可直接放行；Redis miss、读取异常或缓存 token 不一致时都回查 MySQL。mismatch 不能直接返回 `401`，否则旧缓存可能误拒绝刚生成的新 token。
+5. token cache TTL 使用 `min(JWT 剩余有效期, 5 分钟)`；缓存 hit 时不能续期。
+6. 继续使用 `myfeed:account:token:{account_id}`。本地开发不增加 key 版本或迁移代码，实施前手动清理本地 token 测试数据即可。
+7. 正常登录/登出在缓存写成功时立即生效；Redis 写失败或极端并发时接受有界旧值窗口，不宣称严格实时撤销。
+8. 增加 TTL、mismatch 回源、Redis `SET/DEL` 失败、连续登录和正常登出测试。
+9. 日志保持本地项目所需的最小集合：保留启动结果和异常降级；不在每次缓存 hit、miss、set 成功或 delete 成功时打日志；`cache.ErrDisabled` 静默降级。
 
-1. 明确故障契约：鉴权的 Redis `GET` 失败可以回源 MySQL；登录和登出属于会改变会话有效性的写操作，缓存写失败不能在仍信任 Redis hit 的同时假装成功。
-   - Redis 在启动时未启用或 `Ping` 失败：整个进程不信任 Redis token cache，登录/登出直接使用 MySQL，可以正常降级。
-   - Redis 已启用并可能存在被鉴权信任的 token key，但运行中 `DEL` 失败：按 fail-closed 返回 `503`。
-2. 登录在同一账号的会话临界区内先 `DEL` 旧缓存；`DEL` 失败时不更新 MySQL，并返回 `503`。确认旧缓存已删除后更新 MySQL token，再尝试 `SET` 新缓存。此时 `SET` 失败可以返回登录成功，因为旧 key 已确认删除，后续鉴权会从 MySQL 回源。
-3. 登出在同一临界区内删除 Redis token，再清空 MySQL token；删除失败时不清空 MySQL，也不返回“登出成功”。HTTP 层应把缓存基础设施故障映射为 `503 Service Unavailable`，而不是含糊的业务错误。
-4. `JWTAuth` 的 cache miss 回源和回填也必须进入同一账号的临界区，并在获得锁后重新检查缓存，避免登出删除后并发鉴权把旧 token 回填。
-5. Redis token cache 启用前清理当前前缀下的旧 token key，避免服务曾在 Redis 不可用时更新 MySQL、随后重启又信任历史缓存。当前学习项目可用 `SCAN + UNLINK/DEL`；不能使用阻塞式 `KEYS`。
-6. 当前单实例可先使用按 `account_id` 分片的进程内锁；如果后续部署多实例，必须改为可跨实例的会话版本/分布式协调方案，进程内锁不能继续作为一致性保证。
-7. `SetToken` 的 TTL 从 JWT `ExpiresAt` 计算剩余时间；剩余时间小于等于零时不写缓存。
-8. 增加并发和故障测试：旧 token 回填与登出并发、Redis `SET/DEL` 失败、MySQL 更新失败、连续登录旧 token 失效、启动清理和 TTL 不超过 JWT 剩余时间。
-
-必须把可用性取舍讲清楚：如果要求 Redis 故障时登录和登出也始终成功，就不能同时把 Redis positive hit 当作立即撤销的权威判断。可选方案只有每次回查 MySQL，或者接受最长为缓存 TTL 的旧 token 窗口。当前项目强调服务端立即撤销，因此先选择写路径 fail-closed，普通读缓存仍然 fail-open。
+详细设计和验收标准见 `doc/09 token缓存折中改造方案.md`。
 
 #### 3. 视频详情缓存，已完成 MVP
 
@@ -551,7 +553,7 @@ go run ./cmd
 
 如果后续新对话继续本项目，应先确认：
 
-1. 当前工作目录是否为 `/home/reinerbrown/golang/my-feed`。
+1. 当前工作目录是否为 `/Users/chengyue2303/Projects/my-feed`。
 2. 用户是否要求“只给思路，不改代码”。
 3. 当前任务属于代码审查、文档更新，还是直接实现。
 4. API 文档 `doc/*.md` 是否已经和代码同步。
@@ -561,7 +563,7 @@ go run ./cmd
 当前下一步建议：
 
 ```text
-先收口 JWT token 缓存的一致性、TTL 和故障语义
+先按 doc/09 的折中方案收口 JWT token 缓存
 再做 profile 的 60 秒 Cache Aside 和主动失效
 然后做 Feed ZSET
 最后做热榜和限流

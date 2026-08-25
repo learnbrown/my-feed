@@ -102,12 +102,8 @@ func (service *CommentService) CreateComment(ctx context.Context, accountID, vid
 		delCtx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 		defer cancel()
 		err = service.cache.DelDetail(delCtx, videoID)
-		if err == nil {
-			log.Printf("Successfully delete detail cache")
-		} else if errors.Is(err, cache.ErrDisabled) {
-			// skip
-		} else {
-			log.Printf("Failed to delete detail cache: %v", err)
+		if err != nil && !errors.Is(err, cache.ErrDisabled) {
+			log.Printf("level=WARN component=video_detail_cache operation=delete video_id=%d err=%q", videoID, err)
 		}
 	}
 
@@ -178,12 +174,8 @@ func (service *CommentService) DeleteComment(ctx context.Context, accountID, com
 		delCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
 		defer cancel()
 		err = service.cache.DelDetail(delCtx, videoID)
-		if err == nil {
-			log.Printf("Successfully delete detail cache")
-		} else if errors.Is(err, cache.ErrDisabled) {
-			// skip
-		} else {
-			log.Printf("Failed to delete detail cache: %v", err)
+		if err != nil && !errors.Is(err, cache.ErrDisabled) {
+			log.Printf("level=WARN component=video_detail_cache operation=delete video_id=%d err=%q", videoID, err)
 		}
 	}
 

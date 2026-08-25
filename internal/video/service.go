@@ -195,16 +195,10 @@ func (service *VideoService) GetDetail(ctx context.Context, id uint) (*VideoDTO,
 		detailCache, hit, err := service.cache.GetDetail(getCtx, id)
 		if err == nil {
 			if hit {
-				log.Printf("Successfully get detail cache")
 				return &detailCache, nil
-			} else {
-				log.Printf("Miss detail cache")
 			}
-		} else if errors.Is(err, cache.ErrDisabled) {
-			// skip
-			log.Printf("Failed to get detail cache: %v", err)
-		} else {
-			log.Printf("Failed to get detail cache: %v", err)
+		} else if !errors.Is(err, cache.ErrDisabled) {
+			log.Printf("level=WARN component=video_detail_cache operation=get video_id=%d err=%q", id, err)
 		}
 	}
 
@@ -224,13 +218,8 @@ func (service *VideoService) GetDetail(ctx context.Context, id uint) (*VideoDTO,
 		setCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
 		defer cancel()
 		err = service.cache.SetDetail(setCtx, id, *dto, 5*time.Minute)
-		if err == nil {
-			log.Printf("Successfully set detail cache")
-		} else if errors.Is(err, cache.ErrDisabled) {
-			// skip
-			log.Printf("Failed to set detail cache: %v", err)
-		} else {
-			log.Printf("Failed to set detail cache: %v", err)
+		if err != nil && !errors.Is(err, cache.ErrDisabled) {
+			log.Printf("level=WARN component=video_detail_cache operation=set video_id=%d err=%q", id, err)
 		}
 	}
 

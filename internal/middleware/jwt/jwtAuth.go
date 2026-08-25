@@ -15,7 +15,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func JWTAuth(accountRepo *account.AccountRepo, tokenCache account.TokenCache) gin.HandlerFunc {
+type AccountFinder interface {
+	FindAccountByID(id uint) (*account.Account, error)
+}
+
+func JWTAuth(accountRepo AccountFinder, tokenCache account.TokenCache) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 读取Authorization头
 		authHeader := c.GetHeader("Authorization")
@@ -50,30 +54,16 @@ func JWTAuth(accountRepo *account.AccountRepo, tokenCache account.TokenCache) gi
 		// 检查redis中token
 		if tokenCache != nil {
 			getCtx, cancel := context.WithTimeout(c.Request.Context(), 50*time.Millisecond)
-			defer cancel()
-
 			token, hit, err := tokenCache.GetToken(getCtx, claims.AccountID)
-			if err == nil {
-				if hit {
-					log.Printf("Successfully get token cache")
-					if token != tokenString {
-						c.JSON(http.StatusUnauthorized, gin.H{
-							"error": "Invalid token or it has expired",
-						})
-						c.Abort()
-						return
-					}
-					c.Set("userID", claims.AccountID)
-					c.Set("username", claims.Username)
-					c.Next()
-					return
-				} else {
-					log.Printf("Miss token cache")
-				}
-			} else if errors.Is(err, cache.ErrDisabled) {
-				//
-			} else {
-				log.Printf("Failed to get token cache: %v", err)
+			cancel()
+			if err == nil && hit && token == tokenString {
+				c.Set("userID", claims.AccountID)
+				c.Set("username", claims.Username)
+				c.Next()
+				return
+			}
+			if err != nil && !errors.Is(err, cache.ErrDisabled) {
+				log.Printf("level=WARN component=token_cache operation=get account_id=%d err=%q", claims.AccountID, err)
 			}
 		}
 
@@ -104,16 +94,20 @@ func JWTAuth(accountRepo *account.AccountRepo, tokenCache account.TokenCache) gi
 		}
 
 		// 回填redis
-		if tokenCache != nil {
+		if tokenCache != nil && claims.ExpiresAt != nil {
+			ttl := account.CalculateTokenCacheTTL(claims.ExpiresAt.Time, time.Now())
+			if ttl <= 0 {
+				c.JSON(http.StatusUnauthorized, gin.H{
+					"error": "Invalid token or it has expired",
+				})
+				c.Abort()
+				return
+			}
 			setCtx, cancel := context.WithTimeout(c.Request.Context(), 50*time.Millisecond)
-			defer cancel()
-			err = tokenCache.SetToken(setCtx, claims.AccountID, tokenString, 2*time.Hour)
-			if err == nil {
-				log.Printf("Successfully set token cache")
-			} else if errors.Is(err, cache.ErrDisabled) {
-				//
-			} else {
-				log.Printf("Failed to set cache: %v", err)
+			err = tokenCache.SetToken(setCtx, claims.AccountID, tokenString, ttl)
+			cancel()
+			if err != nil && !errors.Is(err, cache.ErrDisabled) {
+				log.Printf("level=WARN component=token_cache operation=set account_id=%d err=%q", claims.AccountID, err)
 			}
 		}
 

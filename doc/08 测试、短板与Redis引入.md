@@ -9,7 +9,7 @@
 
 ## 1. 当前基线结论
 
-截至 2026-08-24，仓库包含 27 个 `_test.go` 文件和 70 个顶层 `TestXxx` 函数。已做过的本地验证：
+截至 2026-08-25，仓库包含 28 个 `_test.go` 文件和 79 个顶层 `TestXxx` 函数。已做过的本地验证：
 
 ```bash
 env GOCACHE=/tmp/go-build-cache go test ./...
@@ -20,21 +20,19 @@ env GOCACHE=/tmp/go-build-cache go vet ./...
 
 当前已有覆盖包括：
 
-- JWT 生成解析、缓存命中和不匹配 token 拒绝。
+- JWT 生成解析、缓存命中、mismatch 回源和旧值短 TTL 失效。
 - Redis key、token cache 和视频详情 cache 生命周期。
 - service 参数校验、非法游标和部分 HTTP 状态码。
 - 显式启用 MySQL 后的点赞幂等、评论计数与权限、关注、私信、分页和 Cache Aside 回源。
 
 仍不能仅凭默认测试证明：
 
-- JWT 登出后旧 token 是否一定失效。
 - MySQL 集成测试是否在当前开发数据库版本上持续通过。
-- 登录、登出与鉴权回填并发时旧 token 是否可能重新进入 Redis。
-- Redis 故障时 token 写路径的 HTTP 契约是否正确。
+- 真实 Redis 进程在网络中断、超时时的完整 HTTP 故障链路是否与 stub/miniredis 测试一致。
 - Redis 前后的 QPS、p95、p99 和 MySQL 查询次数有何变化。
 - API 文档、前端契约、真实代码是否持续一致。
 
-当前最重要的短板已经从“没有自动化测试”变成：MySQL 集成测试默认不执行、缺少 token 并发一致性测试，以及没有可重复的性能基线。继续加 Redis key 之前必须保留这一判断能力。
+当前最重要的短板已经从“没有自动化测试”变成：MySQL 集成测试默认不执行、缺少真实 Redis 故障链路验收，以及没有可重复的性能基线。
 
 ## 2. 测试体系应该怎么搭
 
@@ -756,7 +754,7 @@ video
 - getDetail 不存在 -> 404
 ```
 
-这批测试能防止“service 是对的，但 handler 状态码写错了”。当前已有账号、视频、Feed 及部分完整 API 链路测试，仍需继续补齐缓存故障和 `503` 契约。
+这批测试能防止“service 是对的，但 handler 状态码写错了”。当前已有账号、视频、Feed 及部分完整 API 链路测试，仍需继续补齐缓存故障降级时成功响应不变的契约。
 
 当前 Feed 和视频 handler 已覆盖负数游标；其余列表接口也要保持同样断言。handler 如果返回错误后没有 `return`，就可能继续执行后面的正常逻辑，测试应该能抓住这种问题。
 
@@ -943,15 +941,15 @@ hey -z 60s -c 50 \
 
 表现：
 
-- 已有 27 个 `_test.go` 文件，但依赖 MySQL 的集成测试默认 `Skip`。
-- token 登录、登出、鉴权回填之间缺少竞争测试。
-- Redis 故障注入主要覆盖读取降级，尚未完整覆盖会话写路径。
+- 已有 28 个 `_test.go` 文件，但依赖 MySQL 的集成测试默认 `Skip`。
+- token 缓存已覆盖 5 分钟 TTL、mismatch 回源、Redis 写失败降级和旧值有界失效测试。
+- Redis 故障注入已覆盖 token 读写降级，但尚未做真实 Redis 进程的故障链路验收。
 - Bruno 主链路和持续集成尚未建立。
 
 解决方向：
 
 - 在固定的 `myfeed_test` 环境持续执行 MySQL 集成测试。
-- 为 token 会话增加按账号并发测试和 Redis `SET/DEL` 故障测试。
+- 手动停止本地 Redis 验收登录、鉴权和登出的 HTTP 降级链路。
 - 为主页缓存补 hit、miss、回源、坏 JSON 和主动失效测试。
 - 用 Bruno 或等价脚本保留可演示的完整业务链路。
 
@@ -960,7 +958,7 @@ hey -z 60s -c 50 \
 表现：
 
 - `doc/00 api-概述.md` 已同步为 `latest_time + latest_id` 和 `VideoDTO` 字段，但目前仍依靠人工维护。
-- token 缓存失败究竟返回 `500`、`503` 还是继续成功，尚未形成统一 HTTP 契约。
+- token 缓存折中方案已落地：Redis 写失败不改变 MySQL 成功结果和 HTTP 成功响应。
 - 缓存属于内部实现，正常命中、miss 和回源不应改变成功响应 JSON；这一点需要响应断言保护。
 
 解决方向：
@@ -1039,29 +1037,20 @@ Redis miss/读取异常 -> 查询 accounts -> 比对 accounts.token -> 成功后
 
 它减少了缓存命中时的 MySQL 查询，同时保留 MySQL 回源。
 
-当前待解决的不是读取流程，而是会话写入一致性：
+当前采用适合个人项目的折中方案：
 
 ```text
-登录/登出与鉴权 miss 回填必须按账号串行化
-token TTL 必须使用 JWT 实际剩余时间
-Redis GET 失败可回源；SET/DEL 失败是否允许成功必须服从立即撤销语义
+登录：更新 MySQL token -> 尝试 Redis SET
+登出：清空 MySQL token -> 尝试 Redis DEL
+鉴权：Redis miss/异常/mismatch -> 回查 MySQL
+TTL：min(JWT 剩余有效期, 5 分钟)
 ```
 
-如果 Redis positive hit 可以直接放行，就不能同时宣称登录/登出写失败可以无条件忽略。当前采用正确性优先：会话写路径 fail-closed，普通缓存读路径 fail-open；多实例部署前还要把进程内账号锁升级为跨实例方案。
+MySQL 是最终数据源，Redis `GET/SET/DEL` 失败都可以降级。正常情况下主动 `SET/DEL` 让登录和登出立即反映到缓存；Redis 写失败或极端并发时接受最长 5 分钟的旧值窗口，不宣称故障场景下严格实时撤销。
 
-当前单体的收口方案：
+缓存 mismatch 必须回查 MySQL，不能直接返回 `401`。否则连续登录后 Redis `SET` 失败时，缓存里的旧 token 会误拒绝数据库中的新 token。
 
-```text
-登录：账号锁 -> DEL 旧 key -> 更新 MySQL token -> 尝试 SET 新 key -> 解锁
-登出：账号锁 -> DEL key -> 清空 MySQL token -> 解锁
-鉴权 miss：账号锁 -> 重新检查 -> 查 MySQL -> 回填 -> 解锁
-```
-
-- 登录和登出的 `DEL` 失败返回 `503`，不宣称写操作成功。
-- Redis 在启动时关闭或 `Ping` 失败时，当前进程完全不读取 token cache，登录和登出可安全降级为 MySQL-only；`503` 针对已经启用并可能被信任的 token cache 在运行中删除失败。
-- 登录已确认旧 key 删除后，新 token `SET` 失败可以成功返回并由下次鉴权回源。
-- Redis token cache 启用前用增量 `SCAN + UNLINK/DEL` 清理当前前缀的历史 token key，避免 Redis 故障期间 MySQL 已变化但旧 key 在重启后重新生效。
-- TTL 使用 JWT 实际剩余有效期，不再固定写 2 小时。
+继续使用现有 `myfeed:account:token:{account_id}` key。当前只在本地开发，不增加 key 版本、启动扫描或数据迁移逻辑。完整实施方案见 `doc/09 token缓存折中改造方案.md`。
 
 ### 4.2 视频详情缓存
 
@@ -1160,7 +1149,7 @@ myfeed:rate:{scene}:{identifier}
 ### 6.1 推荐顺序
 
 1. `[已完成]` Redis 基础设施：配置、client、Ping、统一 key 前缀。
-2. `[基础路径完成，待收口]` JWT token 缓存：miss 回源、会话并发协调、剩余 TTL 和故障契约。
+2. `[已完成]` JWT token 缓存：5 分钟 TTL、mismatch 回源、写失败降级和日志收口。
 3. `[已完成 MVP]` 视频详情 Cache Aside 和点赞/评论主动失效。
 4. `[下一项]` 用户主页 60 秒缓存和主动失效。
 5. `[未开始]` Feed 最新流 ZSET。
@@ -1201,8 +1190,8 @@ Redis 改造后，不要只看接口还能不能返回 200。要看：
 - Redis 可用时，目标接口 p95/p99 是否下降。
 - MySQL 查询次数是否下降。
 - Redis miss 时是否能回源 MySQL。
-- Redis 不可用时普通读缓存是否降级可用；token 会话写路径是否按文档 fail-closed 并返回明确错误。
-- 登出后旧 token 是否仍然失效。
+- Redis 不可用时登录、鉴权、登出和普通读缓存是否降级可用。
+- 正常登出是否主动删除缓存；删除失败时旧值是否在 5 分钟内过期。
 - 视频详情、主页、Feed 是否存在不可接受的旧数据。
 - 缓存失效逻辑是否有测试覆盖。
 
@@ -1210,13 +1199,12 @@ Redis 改造后，不要只看接口还能不能返回 200。要看：
 
 建议接下来按这个顺序推进：
 
-1. 收口 token 缓存：账号级会话临界区、JWT 剩余 TTL、`503` 故障契约和竞争测试。
-2. 实现主页 60 秒 Cache Aside，并在关注、点赞和发布后主动失效。
-3. 让 `RUN_MYSQL_TESTS=1` 的测试在固定测试库中可重复执行。
-4. 写 Bruno 主链路集合，作为人工验收和演示脚本。
-5. 准备测试数据生成脚本，至少支持 1 万视频、10 万互动。
-6. 对 `/feed/listLatest`、`/video/getDetail`、`/account/getProfile` 做相同条件下的 MySQL-only/Redis 对比压测。
-7. 根据 `EXPLAIN`、慢查询和 DB 查询次数补索引，再实现 Feed ZSET。
+1. 实现主页 60 秒 Cache Aside，并在关注、点赞和发布后主动失效。
+2. 让 `RUN_MYSQL_TESTS=1` 的测试在固定测试库中可重复执行。
+3. 写 Bruno 主链路集合，作为人工验收和演示脚本。
+4. 准备测试数据生成脚本，至少支持 1 万视频、10 万互动。
+5. 对 `/feed/listLatest`、`/video/getDetail`、`/account/getProfile` 做相同条件下的 MySQL-only/Redis 对比压测。
+6. 根据 `EXPLAIN`、慢查询和 DB 查询次数补索引，再实现 Feed ZSET。
 
 最终目标不是“实现原项目也有的 Redis 功能”，而是你能清楚讲出：
 

@@ -15,6 +15,19 @@ type TokenCache interface {
 	DelToken(ctx context.Context, accountID uint) error
 }
 
+const MaxTokenCacheTTL = 5 * time.Minute
+
+func CalculateTokenCacheTTL(expiresAt, now time.Time) time.Duration {
+	remaining := expiresAt.Sub(now)
+	if remaining <= 0 {
+		return 0
+	}
+	if remaining > MaxTokenCacheTTL {
+		return MaxTokenCacheTTL
+	}
+	return remaining
+}
+
 type RedisTokenCache struct {
 	cache *cache.Client
 }
@@ -39,6 +52,9 @@ func (tc *RedisTokenCache) GetToken(ctx context.Context, accountID uint) (string
 }
 
 func (tc *RedisTokenCache) SetToken(ctx context.Context, accountID uint, token string, ttl time.Duration) error {
+	if ttl <= 0 {
+		return nil
+	}
 	if tc == nil || tc.cache == nil || !tc.cache.Enabled() {
 		return cache.ErrDisabled
 	}

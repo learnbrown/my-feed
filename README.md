@@ -170,24 +170,28 @@ DTO：服务于接口入参/出参
 - 点赞、取消点赞、发布评论、删除评论后删除视频详情缓存。
 - service/handler 单元测试、miniredis 测试和需要显式启用的 MySQL 集成测试。
 
-当前待收口：
+本轮 token 缓存收口已完成：
 
-- token 缓存的登录、登出和鉴权回填之间仍有并发一致性窗口。
-- token TTL 目前固定为 2 小时，应改成 JWT 的实际剩余有效期。
+- token cache TTL 改为 `min(JWT 剩余有效期, 5 分钟)`，缓存命中不续期。
+- 登录先更新 MySQL 再尝试 Redis `SET`；登出先清空 MySQL 再尝试 Redis `DEL`。
+- Redis `GET/SET/DEL` 失败不阻断业务；缓存 mismatch 回查 MySQL。
+- 删除高频缓存 hit/miss/success 日志，缓存异常日志统一带 component、operation 和业务 ID。
+
+当前待补：
+
 - MySQL 集成测试默认跳过，尚未建立持续执行环境。
 - 尚未建立 Bruno 主链路、批量数据生成和 Redis 前后性能基线。
 
 下一步：
 
 ```text
-先收口 token 缓存的一致性和故障语义
-  -> 用户主页聚合 Cache Aside
+用户主页聚合 Cache Aside
   -> Feed 最新流 ZSET
   -> 热榜 ZSET
   -> 基础限流
 ```
 
-MySQL 仍是最终数据源。普通缓存读取失败时回源 MySQL；token 缓存因为涉及立即撤销语义，登录和登出的缓存写失败必须采用明确的正确性策略，不能直接套用普通读缓存的 fail-open 规则。具体方案见 `AGENTS.md` 和 `实现指导.md`。
+MySQL 仍是 token 最终数据源。当前实现采用有界最终一致性：正常登录/登出主动更新或删除 Redis，Redis 失败时业务仍由 MySQL 完成，旧缓存异常窗口最多 5 分钟。当前只在本地开发，继续使用现有 token key，具体见 `doc/09 token缓存折中改造方案.md`。
 
 ## 本地开发
 
