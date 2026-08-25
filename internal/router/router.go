@@ -2,6 +2,8 @@
 package router
 
 import (
+	"net/http"
+
 	"my_feed/internal/account"
 	"my_feed/internal/cache"
 	"my_feed/internal/comment"
@@ -20,13 +22,9 @@ import (
 func SetRouter(sqlDB *gorm.DB, rediscache *cache.Client) (router *gin.Engine) {
 	router = gin.Default()
 
-	router.StaticFile("/", ".run/template/index.html")
-
-	router.Static("/assets", ".run/assets")
 	router.Static("/static/uploads", ".run/uploads")
-
 	router.NoRoute(func(c *gin.Context) {
-		c.File("./dist/index.html")
+		c.JSON(http.StatusNotFound, gin.H{"error": "route not found"})
 	})
 
 	accountRouter := router.Group("/account")

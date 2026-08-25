@@ -189,6 +189,42 @@ DTO：服务于接口入参/出参
 
 MySQL 仍是最终数据源。普通缓存读取失败时回源 MySQL；token 缓存因为涉及立即撤销语义，登录和登出的缓存写失败必须采用明确的正确性策略，不能直接套用普通读缓存的 fail-open 规则。具体方案见 `AGENTS.md` 和 `实现指导.md`。
 
+## 本地开发
+
+前后端分别启动。Gin 只提供 API 和 `/static/uploads` 上传文件，Vue 页面由 Vite 开发服务器提供。
+
+首次运行时，根据示例创建各自的本地环境变量文件：
+
+```bash
+cp .env.example .env
+cp frontend/.env.example frontend/.env.local
+```
+
+`.env` 保存后端数据库、Redis 和 JWT 配置；`frontend/.env.local` 保存前端本地配置。这两个文件都不会提交到 Git。前端本地开发时保持 `VITE_API_BASE_URL` 为空，请求会经过 Vite 代理访问 Gin；只有前后端部署在不同域名时才需要填写公开的后端地址。`VITE_*` 变量会进入浏览器构建产物，不能存放密码或密钥。
+
+启动后端：
+
+```bash
+go run ./cmd
+```
+
+另开一个终端启动前端：
+
+```bash
+npm --prefix frontend install
+npm --prefix frontend run dev
+```
+
+浏览器访问 `http://localhost:5173`。前端开发服务器会把账号、视频、Feed、互动接口和 `/static/uploads` 请求代理到 `http://localhost:8080`。
+
+前端生产构建：
+
+```bash
+npm --prefix frontend run build
+```
+
+构建产物位于 `frontend/dist`，当前开发服务器不会由 Gin 托管这些文件。
+
 ## 验证
 
 默认测试：

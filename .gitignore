@@ -1,4 +1,14 @@
-main
+# Backend
+.env
 *.db
 .run
-.env
+main
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+frontend/.env.*.local
+
+# macOS
+.DS_Store
