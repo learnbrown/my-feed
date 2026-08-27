@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import AppIcon from './components/AppIcon.vue';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const STORAGE_TOKEN = 'my-feed-token';
@@ -175,6 +176,37 @@ const feedTitle = computed(() => {
   if (currentView.value === 'author') return `${profileName(authorFeed.author_id, `作者 ${authorFeed.author_id}`)}的作品`;
   return '最新视频';
 });
+const emptyFeedState = computed(() => {
+  if (currentView.value === 'liked') {
+    return {
+      icon: 'heart',
+      title: '还没有赞过视频',
+      description: '浏览最新内容，遇到喜欢的作品就点亮爱心。',
+      action: '去发现'
+    };
+  }
+  if (currentView.value === 'tag') {
+    return tagFeed.activeTag
+      ? {
+          icon: 'tag',
+          title: `没有找到 #${tagFeed.activeTag} 的视频`,
+          description: '换一个标签试试，或返回最新内容。',
+          action: '返回最新'
+        }
+      : {
+          icon: 'tag',
+          title: '搜索一个感兴趣的标签',
+          description: '试试 go、city 或 ocean。',
+          action: ''
+        };
+  }
+  return {
+    icon: 'film',
+    title: '这里暂时还没有内容',
+    description: '成为第一个分享作品的人。',
+    action: '去发布'
+  };
+});
 const myProfile = computed(() => (account.value?.id ? profileById[account.value.id] : null));
 const authorProfile = computed(() => (authorFeed.author_id ? profileById[authorFeed.author_id] : null));
 const videoPanelHeading = computed(() => {
@@ -284,6 +316,14 @@ function goPage(page) {
   }
 }
 
+function handleEmptyFeedAction() {
+  if (currentView.value === 'liked' || currentView.value === 'tag') {
+    loadLatest(true);
+    return;
+  }
+  goPage('publish');
+}
+
 async function apiRequest(path, options = {}) {
   const { auth = false, form = false, body, ...fetchOptions } = options;
   const headers = new Headers(fetchOptions.headers || {});
@@ -346,11 +386,17 @@ function formatTime(value) {
   const normalized = numericValue === null ? String(value).replace(/\.(\d{3})\d+/, '.$1') : numericValue;
   const date = new Date(normalized);
   if (Number.isNaN(date.getTime())) return '刚刚';
+
+  const elapsed = Date.now() - date.getTime();
+  if (elapsed >= 0 && elapsed < 60_000) return '刚刚';
+  if (elapsed >= 0 && elapsed < 3_600_000) return `${Math.floor(elapsed / 60_000)} 分钟前`;
+  if (elapsed >= 0 && elapsed < 86_400_000) return `${Math.floor(elapsed / 3_600_000)} 小时前`;
+  if (elapsed >= 0 && elapsed < 604_800_000) return `${Math.floor(elapsed / 86_400_000)} 天前`;
+
   return new Intl.DateTimeFormat('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
+    year: date.getFullYear() === new Date().getFullYear() ? undefined : 'numeric',
+    month: 'short',
+    day: 'numeric'
   }).format(date);
 }
 
@@ -519,13 +565,28 @@ function setupReelObserver() {
     },
     {
       root: scroller,
-      threshold: [0.55, 0.7, 0.85]
+      threshold: [0.55, 0.72, 0.9]
     }
   );
 
   for (const item of items) {
     reelObserver.observe(item);
   }
+}
+
+function scrollToAdjacentVideo(direction) {
+  const scroller = reelScroller.value;
+  if (!scroller || !visibleVideos.value.length) return;
+
+  const currentIndex = Math.max(
+    0,
+    visibleVideos.value.findIndex((video) => videoId(video) === activeVideoId.value)
+  );
+  const targetIndex = Math.min(visibleVideos.value.length - 1, Math.max(0, currentIndex + direction));
+  const targetId = videoRefKey(visibleVideos.value[targetIndex]);
+  const target = scroller.querySelector(`[data-reel-video-id="${targetId}"]`);
+  if (!target) return;
+  scroller.scrollTo({ top: target.offsetTop, behavior: 'smooth' });
 }
 
 function loadMoreActiveFeed() {
@@ -1244,6 +1305,11 @@ function appendFeed(feed, data, reset, options = {}) {
   if (options.updateActive && videos.length && (!activeVideoId.value || reset)) {
     setActiveVideo(videos[0]);
   }
+  if (reset && options.updateActive) {
+    nextTick(() => {
+      reelScroller.value?.scrollTo({ top: 0, behavior: 'instant' });
+    });
+  }
 }
 
 async function openDetail(video) {
@@ -1292,6 +1358,7 @@ async function submitAuth() {
       await loadProfile(account.value.id, true);
       await loadActiveLikeState();
       await loadActiveAuthorFollowState();
+      appPage.value = 'feed';
     }
   } catch (error) {
     showToast(error.message, 'error');
@@ -1374,7 +1441,7 @@ function clearSession() {
   localStorage.removeItem(STORAGE_ACCOUNT);
 }
 
-function onFileSelect(event, kind) {
+async function onFileSelect(event, kind) {
   const file = event.target.files?.[0];
   event.target.value = '';
   if (!file) return;
@@ -1390,6 +1457,7 @@ function onFileSelect(event, kind) {
     revokePreview(uploadState.coverPreview);
     uploadState.coverPreview = URL.createObjectURL(file);
   }
+  await uploadFile(kind);
 }
 
 function revokePreview(url) {
@@ -1489,33 +1557,51 @@ function resetPublishForm() {
 </script>
 
 <template>
-  <main class="app-shell">
+  <main class="app-shell" :class="{ 'feed-mode': appPage === 'feed' }">
     <header class="topbar">
       <button class="brand" type="button" @click="loadLatest(true)">
-        <span class="brand-mark">MF</span>
-        <span>My Feed System</span>
+        <span class="brand-mark"><span></span><span></span></span>
+        <span class="brand-copy">
+          <strong>MyFeed</strong>
+          <small>发现 · 记录 · 连接</small>
+        </span>
       </button>
 
       <nav class="app-nav" aria-label="主导航">
-        <button :class="{ active: appPage === 'feed' }" type="button" @click="goPage('feed')">浏览视频</button>
-        <button :class="{ active: appPage === 'publish' }" type="button" @click="goPage('publish')">上传发布</button>
-        <button :class="{ active: appPage === 'account' }" type="button" @click="goPage('account')">账户</button>
+        <button :class="{ active: appPage === 'feed' }" type="button" @click="goPage('feed')">
+          <AppIcon name="compass" />
+          <span>发现</span>
+        </button>
+        <button :class="{ active: appPage === 'publish' }" type="button" @click="goPage('publish')">
+          <AppIcon name="upload" />
+          <span>发布</span>
+        </button>
+        <button :class="{ active: appPage === 'account' }" type="button" @click="goPage('account')">
+          <AppIcon name="user" />
+          <span>我的</span>
+        </button>
       </nav>
 
       <button class="session-pill" type="button" @click="goPage('account')">
+        <span class="session-avatar">
+          <img v-if="account?.avatar_url" :src="normalizeUrl(account.avatar_url)" alt="" />
+          <span v-else>{{ isAuthed ? selectedAccountName.slice(0, 1).toUpperCase() : '游' }}</span>
+        </span>
+        <span class="session-copy">
+          <strong>{{ selectedAccountName }}</strong>
+          <small>{{ isAuthed ? '查看个人主页' : '登录后参与互动' }}</small>
+        </span>
         <span class="status-dot" :class="{ online: isAuthed }"></span>
-        <span>{{ selectedAccountName }}</span>
       </button>
     </header>
 
-    <section class="page-shell">
+    <section class="page-shell" :class="{ 'feed-page-shell': appPage === 'feed' }">
       <section v-if="appPage === 'feed'" class="feed-stage" aria-label="视频流">
-        <div class="feed-toolbar">
+        <div class="feed-toolbar" :class="{ 'panel-open': videoPanelOpen }">
           <div>
-            <p class="eyebrow">
-              {{ currentView === 'tag' ? 'Tag Feed' : currentView === 'liked' ? 'Liked Feed' : currentView === 'author' ? 'Author Feed' : 'Latest Feed' }}
-            </p>
+            <p class="eyebrow">{{ currentView === 'tag' ? '按兴趣浏览' : currentView === 'liked' ? '你的收藏夹' : currentView === 'author' ? '创作者主页' : '今日新鲜内容' }}</p>
             <h1>{{ feedTitle }}</h1>
+            <p class="page-lead">为你收集值得停留的片刻。</p>
           </div>
 
           <div class="feed-actions">
@@ -1525,7 +1611,8 @@ function resetPublishForm() {
               <button :class="{ active: currentView === 'liked' }" type="button" @click="loadLikedVideos(true)">已赞</button>
             </div>
             <form class="tag-search" @submit.prevent="loadByTag(true)">
-              <input v-model="tagFeed.tag_name" placeholder="搜索标签，如 go" />
+              <AppIcon name="search" :size="18" />
+              <input v-model="tagFeed.tag_name" aria-label="搜索标签" placeholder="搜索标签，如 go" />
               <button type="submit">搜索</button>
             </form>
           </div>
@@ -1535,12 +1622,25 @@ function resetPublishForm() {
 
         <div v-if="!visibleVideos.length && activeFeed.loading" class="empty-state">正在加载视频...</div>
         <div v-else-if="!visibleVideos.length" class="empty-state">
-          <strong>还没有视频</strong>
-          <span>启动后端后刷新，或先去上传发布一个视频。</span>
+          <span class="empty-icon"><AppIcon :name="emptyFeedState.icon" :size="28" /></span>
+          <strong>{{ emptyFeedState.title }}</strong>
+          <span>{{ emptyFeedState.description }}</span>
+          <button v-if="emptyFeedState.action" class="secondary-action empty-action" type="button" @click="handleEmptyFeedAction">
+            {{ emptyFeedState.action }}
+          </button>
         </div>
 
         <div v-else class="feed-content" :class="{ 'panel-open': videoPanelOpen }">
-          <div ref="reelScroller" class="reel-layout reel-scroll" aria-label="上下滑动视频流">
+          <div
+            ref="reelScroller"
+            class="reel-layout reel-scroll"
+            aria-label="上下滑动视频流"
+            tabindex="0"
+            @keydown.down.prevent="scrollToAdjacentVideo(1)"
+            @keydown.page-down.prevent="scrollToAdjacentVideo(1)"
+            @keydown.up.prevent="scrollToAdjacentVideo(-1)"
+            @keydown.page-up.prevent="scrollToAdjacentVideo(-1)"
+          >
             <article
               v-for="video in visibleVideos"
               :key="videoId(video)"
@@ -1566,9 +1666,14 @@ function resetPublishForm() {
               <img v-else-if="video.cover_url" :src="normalizeUrl(video.cover_url)" alt="" />
               <div v-else class="media-fallback">No Media</div>
 
+              <div v-if="isActiveVideo(video) && player.paused && video.play_url" class="play-indicator" aria-hidden="true">
+                <AppIcon name="play" :size="30" />
+              </div>
+
               <div class="video-overlay">
                 <div class="author-actions">
                   <button class="author-button" type="button" @click="openAuthorPanel(video.author_id)">
+                    <span class="mini-avatar">{{ profileName(video.author_id, `作者 ${video.author_id}`)?.slice(0, 1)?.toUpperCase() }}</span>
                     {{ profileName(video.author_id, `作者 ${video.author_id}`) }}
                   </button>
                   <button
@@ -1579,6 +1684,7 @@ function resetPublishForm() {
                     type="button"
                     @click="toggleFollow(video.author_id)"
                   >
+                    <AppIcon :name="isFollowing(video.author_id) ? 'user-check' : 'user-plus'" :size="15" />
                     {{ isFollowing(video.author_id) ? '已关注' : '关注' }}
                   </button>
                   <button
@@ -1587,6 +1693,7 @@ function resetPublishForm() {
                     type="button"
                     @click="openMessages(video.author_id, profileName(video.author_id, `作者 ${video.author_id}`))"
                   >
+                    <AppIcon name="mail" :size="15" />
                     私信
                   </button>
                 </div>
@@ -1607,28 +1714,32 @@ function resetPublishForm() {
                   :title="isVideoLiked(video) ? '取消点赞' : '点赞'"
                   @click="toggleLike(video)"
                 >
-                  <span>♥</span>
+                  <AppIcon name="heart" :size="20" />
                   {{ compactNumber(video.likes_count) }}
                 </button>
                 <button type="button" title="评论" @click="openComments(video)">
-                  <span>◎</span>
+                  <AppIcon name="comment" :size="20" />
                   {{ compactNumber(video.comments_count) }}
                 </button>
-                <button type="button" title="热度">
-                  <span>↗</span>
+                <button class="passive-metric" type="button" title="热度">
+                  <AppIcon name="flame" :size="20" />
                   {{ compactNumber(video.popularity) }}
                 </button>
                 <button type="button" title="详情" @click="openDetail(video)">
-                  <span>i</span>
+                  <AppIcon name="info" :size="20" />
                   详情
                 </button>
               </div>
 
               <div v-if="isActiveVideo(video) && video.play_url" class="player-controls">
                 <div class="player-actions">
-                  <button type="button" @click="togglePlayback(video)">{{ player.paused ? '播放' : '暂停' }}</button>
+                  <button type="button" :aria-label="player.paused ? '播放' : '暂停'" @click="togglePlayback(video)">
+                    <AppIcon :name="player.paused ? 'play' : 'pause'" :size="16" />
+                  </button>
                   <span>{{ formatDuration(player.currentTime) }} / {{ formatDuration(player.duration) }}</span>
-                  <button type="button" @click="toggleMute(video)">{{ player.muted ? '取消静音' : '静音' }}</button>
+                  <button type="button" :aria-label="player.muted ? '取消静音' : '静音'" @click="toggleMute(video)">
+                    <AppIcon :name="player.muted ? 'mute' : 'volume'" :size="16" />
+                  </button>
                 </div>
                 <input
                   class="player-progress"
@@ -1664,7 +1775,7 @@ function resetPublishForm() {
                 <h2>{{ videoPanelHeading }}</h2>
                 <p class="drawer-subtitle">{{ videoPanelSubtitle }}</p>
               </div>
-              <button type="button" @click="closeVideoPanel">×</button>
+              <button type="button" aria-label="关闭侧栏" @click="closeVideoPanel"><AppIcon name="close" /></button>
             </div>
 
             <div class="panel-tabs" aria-label="侧栏标签">
@@ -1817,8 +1928,9 @@ function resetPublishForm() {
 
       <section v-else-if="appPage === 'publish'" class="publish-page" aria-label="上传发布">
         <div class="page-heading">
-          <p class="eyebrow">Publish</p>
-          <h1>上传发布</h1>
+          <p class="eyebrow">分享你的此刻</p>
+          <h1>创作中心</h1>
+          <p class="page-lead">上传素材、补充信息，然后把作品分享给大家。</p>
         </div>
 
         <div v-if="!isAuthed" class="auth-lock">
@@ -1830,29 +1942,33 @@ function resetPublishForm() {
         <form v-else class="publish-workbench" @submit.prevent="publishVideo">
           <section class="panel-section upload-panel">
             <div class="section-heading">
-              <p>文件上传</p>
-              <span class="tiny-note">封面可选</span>
+              <p><span class="step-index">01</span> 上传素材</p>
+              <span class="tiny-note">选择后自动上传 · 封面可选</span>
             </div>
 
             <div class="upload-grid">
               <label class="file-drop">
-                <span>视频 .mp4</span>
+                <span class="drop-icon"><AppIcon name="film" :size="24" /></span>
+                <span>MP4 视频</span>
                 <input accept="video/mp4" type="file" @change="onFileSelect($event, 'video')" />
                 <strong>{{ uploadState.videoFile?.name || '选择视频文件' }}</strong>
+                <small>{{ uploadState.videoUploading ? '正在上传，请稍候…' : hasUploadedVideo ? '上传完成，点击可替换' : '点击选择，最大尺寸以后端配置为准' }}</small>
               </label>
               <label class="file-drop">
-                <span>封面图片</span>
+                <span class="drop-icon"><AppIcon name="image" :size="24" /></span>
+                <span>视频封面</span>
                 <input accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" type="file" @change="onFileSelect($event, 'cover')" />
                 <strong>{{ uploadState.coverFile?.name || '选择封面图片' }}</strong>
+                <small>{{ uploadState.coverUploading ? '正在上传，请稍候…' : hasUploadedCover ? '上传完成，点击可替换' : '推荐使用 16:9 的 JPG、PNG 或 WebP' }}</small>
               </label>
             </div>
 
             <div class="button-row">
               <button class="ghost-action" :disabled="!uploadState.videoFile || uploadState.videoUploading" type="button" @click="uploadFile('video')">
-                {{ uploadState.videoUploading ? '上传中' : hasUploadedVideo ? '重新上传视频' : '上传视频' }}
+                {{ uploadState.videoUploading ? '上传中' : hasUploadedVideo ? '重新上传视频' : '重试视频上传' }}
               </button>
               <button class="ghost-action" :disabled="!uploadState.coverFile || uploadState.coverUploading" type="button" @click="uploadFile('cover')">
-                {{ uploadState.coverUploading ? '上传中' : hasUploadedCover ? '重新上传封面' : '上传封面' }}
+                {{ uploadState.coverUploading ? '上传中' : hasUploadedCover ? '重新上传封面' : '重试封面上传' }}
               </button>
             </div>
 
@@ -1869,18 +1985,18 @@ function resetPublishForm() {
 
           <section class="panel-section">
             <div class="section-heading">
-              <p>发布信息</p>
+              <p><span class="step-index">02</span> 完善信息</p>
               <span class="tiny-note">标题可包含 #tag</span>
             </div>
 
             <div class="stack-form">
               <label>
                 <span>标题</span>
-                <input v-model="publishForm.title" placeholder="First video #go #gin" />
+                <input v-model="publishForm.title" placeholder="给作品起一个好标题" />
               </label>
               <label>
                 <span>描述</span>
-                <textarea v-model="publishForm.description" placeholder="feed system #gorm"></textarea>
+                <textarea v-model="publishForm.description" placeholder="讲讲视频背后的故事，也可以加入 #标签"></textarea>
               </label>
             </div>
 
@@ -1894,13 +2010,14 @@ function resetPublishForm() {
 
       <section v-else class="account-page" aria-label="账户">
         <div class="page-heading">
-          <p class="eyebrow">Account</p>
-          <h1>{{ isAuthed ? '个人信息' : '登录注册' }}</h1>
+          <p class="eyebrow">你的 MyFeed</p>
+          <h1>{{ isAuthed ? '个人主页' : '欢迎回来' }}</h1>
+          <p class="page-lead">{{ isAuthed ? '管理作品与关系，查看你的社区足迹。' : '登录后即可点赞、评论、关注创作者并发布作品。' }}</p>
         </div>
 
         <section v-if="!isAuthed" class="panel-section account-card">
           <div class="section-heading">
-            <p>{{ authMode === 'login' ? '欢迎回来' : '创建账号' }}</p>
+            <p>{{ authMode === 'login' ? '账号登录' : '创建账号' }}</p>
             <div class="mode-switch">
               <button :class="{ active: authMode === 'login' }" type="button" @click="authMode = 'login'">登录</button>
               <button :class="{ active: authMode === 'register' }" type="button" @click="authMode = 'register'">注册</button>
@@ -1909,14 +2026,14 @@ function resetPublishForm() {
           <form class="stack-form" @submit.prevent="submitAuth">
             <label>
               <span>用户名</span>
-              <input v-model.trim="authForm.username" autocomplete="username" placeholder="user" />
+              <input v-model.trim="authForm.username" autocomplete="username" placeholder="请输入用户名" />
             </label>
             <label>
               <span>密码</span>
               <input
                 v-model="authForm.password"
                 :autocomplete="authMode === 'login' ? 'current-password' : 'new-password'"
-                placeholder="user"
+                placeholder="请输入密码"
                 type="password"
               />
             </label>
@@ -1978,7 +2095,7 @@ function resetPublishForm() {
           <h2>{{ relationState.mode === 'followers' ? '粉丝列表' : '关注列表' }}</h2>
           <p class="drawer-subtitle">{{ relationState.title }}</p>
         </div>
-        <button type="button" @click="relationDrawer = false">×</button>
+        <button type="button" aria-label="关闭关系列表" @click="relationDrawer = false"><AppIcon name="close" /></button>
       </div>
 
       <p v-if="relationState.error" class="error-text">{{ relationState.error }}</p>
@@ -2023,8 +2140,8 @@ function resetPublishForm() {
 
     <div v-if="selectedVideo" class="modal-backdrop" @click.self="selectedVideo = null">
       <article class="detail-modal">
-        <button class="close-button" type="button" @click="selectedVideo = null">×</button>
-        <p class="eyebrow">Video Detail</p>
+        <button class="close-button" type="button" aria-label="关闭详情" @click="selectedVideo = null"><AppIcon name="close" /></button>
+        <p class="eyebrow">视频详情</p>
         <h2>{{ selectedVideo.title }}</h2>
         <p class="muted">ID {{ videoId(selectedVideo) }} · {{ formatTime(createdAtOf(selectedVideo)) }}</p>
         <div class="detail-media">
